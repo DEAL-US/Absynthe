@@ -15,14 +15,17 @@ graph = gen.label_assignment(graph)
 
 # Apply perturbation (remove nodes) and get removed nodes
 graph, nodes = gen.remove_important_nodes(graph, 2)
-print("Nodos eliminados:", nodes)
+print("Removed nodes:", nodes)
 
 # Recompute observed ground truth after perturbation
 graph = gen.label_reassignment(graph)
 
-print("Nodos:", list(graph.nodes()))
-print("Aristas:", list(graph.edges()))
-print("Atributos de nodos:")
+print("Nodes:", list(graph.nodes()))
+print("Edges:", list(graph.edges()))
+print("Node attributes:")
 for node in graph.nodes():
-    print(f"Nodo {node}: {graph.nodes[node]}")
-print("Componentes conexas:", list(nx.connected_components(graph)))
+    print(f"Node {node}: {graph.nodes[node]}")
+print("Connected components:", list(nx.connected_components(graph)))
+
+# Visualize the graph
+visualize_graph(graph, title="Generated Graph with Motifs")
