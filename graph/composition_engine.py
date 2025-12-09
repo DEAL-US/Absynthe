@@ -3,14 +3,14 @@ from typing import List, Tuple, Dict, Optional
 import networkx as nx
 
 
-def compose_motifs(n_motifs: int, pattern: str = 'sequential', params: Dict = None, rng: Optional[random.Random] = None) -> List[Tuple[int, int]]:
+def compose_motifs(n_motifs: int, pattern: str = 'sequential', params: Dict = None) -> List[Tuple[int, int]]:
     """Create motif-level edges according to the requested composition pattern.
 
     Returns a list of tuples (i, j) indicating motif indices to connect.
     Supported patterns: sequential, er, ba, sbm, star, hierarchical
     """
     params = params or {}
-    rnd = rng or random
+    rnd = random
     edges: List[Tuple[int, int]] = []
     if n_motifs <= 1:
         return edges
@@ -31,13 +31,7 @@ def compose_motifs(n_motifs: int, pattern: str = 'sequential', params: Dict = No
     elif pattern == 'ba':
         m = int(params.get('m', 1))
         m = max(1, min(m, max(1, n_motifs - 1)))
-        # networkx accepts a seed; derive one from rnd if provided
-        seed_for_nx = None
-        try:
-            seed_for_nx = rnd.randint(0, 2 ** 32 - 1) if rnd is not random else None
-        except Exception:
-            seed_for_nx = None
-        ba = nx.barabasi_albert_graph(n_motifs, m, seed=seed_for_nx)
+        ba = nx.barabasi_albert_graph(n_motifs, m)
         for u, v in ba.edges():
             edges.append((u, v))
 

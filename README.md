@@ -8,32 +8,36 @@ Python project for generating and manipulating graphs using motifs and compositi
 
 ## Requirements
 - Python 3.8 or newer
-- (Optional) Create a virtual environment: `python -m venv venv`
+- A virtual environment is recommended (example below).
 
-## Quick Setup
-On Linux / macOS (bash):
+This repository includes a `requirements.txt` with the minimal dependencies used by the examples (`networkx`, `numpy`, `matplotlib`). Install them into your venv with:
 
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -U pip
-pip install pytest
+```powershell
+# Windows (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-There is no `requirements.txt` in the repository by default; add dependencies to your environment as needed.
-
-## Running Tests
-To run the full test suite:
-
 ```bash
-pytest -q
+# macOS / Linux (bash)
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-To run a specific test file, for example:
+## Running Examples
+After activating the venv and installing `requirements.txt`, run the example runner or tests:
 
-```bash
-pytest test_graph.py -q
+```powershell
+# run example
+python .\test_graph.py
+
 ```
+
+Note: the framework now uses a single global seed defined in `test_graph.py` (variable `SEED`) to control all randomness. Change that value to reproduce different random instances.
 
 ## Project Structure
 - `graph/`: generators and composition/perturbation engines.

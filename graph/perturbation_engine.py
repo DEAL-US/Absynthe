@@ -7,8 +7,7 @@ from statistics import mean
 def remove_nodes(graph: nx.Graph,
                  n: int,
                  strategy: str = 'motif',
-                 params: Optional[Dict] = None,
-                 rng: Optional[random.Random] = None) -> Tuple[nx.Graph, List[int]]:
+                 params: Optional[Dict] = None) -> Tuple[nx.Graph, List[int]]:
     """Remove n nodes according to the requested strategy and return (new_graph, removed_nodes).
 
     Strategies:
@@ -22,7 +21,6 @@ def remove_nodes(graph: nx.Graph,
     Fallback: if the strategy cannot find enough nodes, it will fill with random nodes.
     """
     params = params or {}
-    rng = rng or random
 
     G = graph.copy()
     nodes = list(G.nodes())
@@ -36,7 +34,7 @@ def remove_nodes(graph: nx.Graph,
     strat = (strategy or 'random').lower()
 
     if strat == 'random':
-        to_remove = rng.sample(nodes, n)
+        to_remove = random.sample(nodes, n)
 
     elif strat == 'motif':
         from collections import defaultdict
@@ -50,20 +48,20 @@ def remove_nodes(graph: nx.Graph,
         # prefer groups with size >= n
         candidates = [grp for grp in motif_groups.values() if len(grp) >= n]
         if candidates:
-            chosen = rng.choice(candidates)
-            to_remove = rng.sample(chosen, n)
+            chosen = random.choice(candidates)
+            to_remove = random.sample(chosen, n)
         else:
             # pick from largest group first
             groups_sorted = sorted(motif_groups.values(), key=lambda g: len(g), reverse=True)
             for grp in groups_sorted:
                 take = min(n - len(to_remove), len(grp))
                 if take > 0:
-                    to_remove += rng.sample(grp, take)
+                    to_remove += random.sample(grp, take)
                 if len(to_remove) >= n:
                     break
             if len(to_remove) < n:
                 remaining = [u for u in nodes if u not in to_remove]
-                to_remove += rng.sample(remaining, n - len(to_remove))
+                to_remove += random.sample(remaining, n - len(to_remove))
 
     elif strat == 'degree':
         mode = params.get('mode', 'high')
@@ -80,29 +78,29 @@ def remove_nodes(graph: nx.Graph,
         role = params.get('role')
         if role is None:
             # fallback to random
-            to_remove = rng.sample(nodes, n)
+            to_remove = random.sample(nodes, n)
         else:
             candidates = [u for u in nodes if G.nodes[u].get('role') == role]
             if len(candidates) >= n:
-                to_remove = rng.sample(candidates, n)
+                to_remove = random.sample(candidates, n)
             else:
-                to_remove = candidates + rng.sample([u for u in nodes if u not in candidates], n - len(candidates))
+                to_remove = candidates + random.sample([u for u in nodes if u not in candidates], n - len(candidates))
 
     elif strat == 'by_attribute':
         attr = params.get('attr')
         value = params.get('value')
         if attr is None:
-            to_remove = rng.sample(nodes, n)
+            to_remove = random.sample(nodes, n)
         else:
             candidates = [u for u in nodes if G.nodes[u].get(attr) == value]
             if len(candidates) >= n:
-                to_remove = rng.sample(candidates, n)
+                to_remove = random.sample(candidates, n)
             else:
-                to_remove = candidates + rng.sample([u for u in nodes if u not in candidates], n - len(candidates))
+                to_remove = candidates + random.sample([u for u in nodes if u not in candidates], n - len(candidates))
 
     else:
         # unknown strategy: fallback to random
-        to_remove = rng.sample(nodes, n)
+        to_remove = random.sample(nodes, n)
 
     # perform removal
     G.remove_nodes_from(to_remove)
@@ -115,7 +113,7 @@ def perturb_edges(graph: nx.Graph,
                   add_num: Optional[int] = None,
                   add_strategy: str = 'random',
                   params: Optional[Dict] = None,
-                  rng: Optional[random.Random] = None) -> nx.Graph:
+                  ) -> nx.Graph:
     """Perturb edges by removing each existing edge with probability `p_remove` and adding edges.
 
     - p_remove: probability to remove each existing edge
@@ -124,26 +122,25 @@ def perturb_edges(graph: nx.Graph,
     - add_strategy: currently only 'random' supported; placeholder for block-aware additions
     """
     params = params or {}
-    rng = rng or random
 
     G = graph.copy()
 
     # remove edges
     if p_remove > 0:
         for u, v in list(G.edges()):
-            if rng.random() < p_remove:
+            if random.random() < p_remove:
                 G.remove_edge(u, v)
 
     # add edges
     non_edges = list(nx.non_edges(G))
     if add_num is not None:
         add_num = min(add_num, len(non_edges))
-        additions = rng.sample(non_edges, add_num) if add_num > 0 else []
+        additions = random.sample(non_edges, add_num) if add_num > 0 else []
         G.add_edges_from(additions)
     else:
         if p_add > 0:
             for u, v in non_edges:
-                if rng.random() < p_add:
+                if random.random() < p_add:
                     G.add_edge(u, v)
 
     return G
