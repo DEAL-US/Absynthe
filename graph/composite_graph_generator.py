@@ -14,7 +14,7 @@ from graph.composition_engine import compose_motifs
 class CompositeGraphGenerator(GraphGenerator, NodeLabelAssigner, NodeRemover):
     """Generator for composite graphs from a list of motif strings."""
 
-    def __init__(self, motifs: List[List] = None, seed: int = None, rng: Optional[random.Random] = None):
+    def __init__(self, motifs: List[List] = None):
         self.motifs = motifs or []
         self.generators: Dict[str, Type] = {
             "cycle": CycleMotifGenerator,
@@ -23,15 +23,6 @@ class CompositeGraphGenerator(GraphGenerator, NodeLabelAssigner, NodeRemover):
             "star": StarMotifGenerator,
             "gate": GateMotifGenerator,
         }
-        # Default RNG/seed for reproducibility; can be overridden per-call via kwargs
-        self.default_seed = 42
-        if rng is not None:
-            self.rng = rng
-        elif seed is not None:
-            self.rng = random.Random(seed)
-            self.default_seed = seed
-        else:
-            self.rng = random.Random(self.default_seed)
 
     def generate_graph(self, num_extra_vertices: int = 0, num_extra_edges: int = 0, **kwargs) -> nx.Graph:
         """Generate a composite graph by combining motifs from the list, then adding extra vertices and edges.
@@ -89,29 +80,20 @@ class CompositeGraphGenerator(GraphGenerator, NodeLabelAssigner, NodeRemover):
         pattern = kwargs.get('composition', 'sequential')
         comp_params = kwargs.get('composition_params', {}) or {}
 
-        # RNG / seed handling for reproducibility
-        rng = kwargs.get('rng')
-        seed = kwargs.get('seed')
-        if rng is None:
-            if seed is not None:
-                rng = random.Random(seed)
-            else:
-                rng = self.rng
-
-        motif_edges = compose_motifs(len(motif_node_sets), pattern, comp_params, rng=rng)
+        motif_edges = compose_motifs(len(motif_node_sets), pattern, comp_params)
         for i, j in motif_edges:
             if motif_node_sets[i] and motif_node_sets[j]:
-                node1 = rng.choice(list(motif_node_sets[i]))
-                node2 = rng.choice(list(motif_node_sets[j]))
+                node1 = random.choice(list(motif_node_sets[i]))
+                node2 = random.choice(list(motif_node_sets[j]))
                 combined_graph.add_edge(node1, node2)
 
         # Add extra vertices, each connected to a random existing node
-        combined_graph = add_vertices(combined_graph, num_extra_vertices, rng=rng)
+        combined_graph = add_vertices(combined_graph, num_extra_vertices)
 
         # Add extra edges randomly
         # utils.add_random_edges expects either p or num_edges; here we pass num_edges
         if num_extra_edges:
-            combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges, rng=rng)
+            combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges)
 
         return combined_graph
 
@@ -244,7 +226,7 @@ class CompositeGraphGenerator(GraphGenerator, NodeLabelAssigner, NodeRemover):
         """
         # Use the new perturbation engine: default strategy is 'motif' to preserve previous behaviour
         # Use the generator's RNG for reproducibility
-        graph_copy, nodes_removed = remove_nodes(graph, n, strategy='motif', params=None, rng=self.rng)
+        graph_copy, nodes_removed = remove_nodes(graph, n, strategy='motif', params=None)
 
         # Reassign labels to the remaining nodes (persist as observed_ground_truth)
         graph_copy = self.label_reassignment(graph_copy)

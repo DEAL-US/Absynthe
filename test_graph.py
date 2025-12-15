@@ -5,8 +5,9 @@ from visualize import visualize_graph
 import networkx as nx
 import random
 
-# Set seed for reproducibility
-random.seed(42)
+# Global seed: set once here to control all randomness in the framework
+SEED = 42
+random.seed(SEED)
 
 gen = CompositeGraphGenerator(motifs=[["cycle", 4], ["house"], ["cycle", 3]])
 graph = gen.generate_graph(num_extra_vertices=2, num_extra_edges=3, start=0)
