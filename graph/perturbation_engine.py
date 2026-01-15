@@ -2,7 +2,15 @@ import random
 from typing import List, Tuple, Dict, Optional
 import networkx as nx
 from statistics import mean
-
+from .perturbation_strategies import (
+    random_strategy,
+    motif_strategy,
+    degree_strategy,
+    centrality_strategy,
+    role_strategy,
+    by_attribute_strategy,
+    STRATEGY_MAP
+)
 
 def remove_nodes(graph: nx.Graph,
                  n: int,
@@ -28,81 +36,14 @@ def remove_nodes(graph: nx.Graph,
     nodes = list(G.nodes())
     n = min(n, len(nodes))
 
-    to_remove: List[int] = []
-
     if n == 0:
-        return (G, to_remove)
+        return (G, [])
 
-    strat = (strategy or 'random').lower()
+    strat = STRATEGY_MAP.get((strategy or 'random').lower())
+    if not strat:
+        raise ValueError(f"Unknown strategy: {strategy}")
 
-    if strat == 'random':
-        to_remove = rng.sample(nodes, n)
-
-    elif strat == 'motif':
-        from collections import defaultdict
-
-        motif_groups = defaultdict(list)
-        for node in nodes:
-            mid = G.nodes[node].get('motif_id')
-            if mid is not None:
-                motif_groups[mid].append(node)
-
-        # prefer groups with size >= n
-        candidates = [grp for grp in motif_groups.values() if len(grp) >= n]
-        if candidates:
-            chosen = rng.choice(candidates)
-            to_remove = rng.sample(chosen, n)
-        else:
-            # pick from largest group first
-            groups_sorted = sorted(motif_groups.values(), key=lambda g: len(g), reverse=True)
-            for grp in groups_sorted:
-                take = min(n - len(to_remove), len(grp))
-                if take > 0:
-                    to_remove += rng.sample(grp, take)
-                if len(to_remove) >= n:
-                    break
-            if len(to_remove) < n:
-                remaining = [u for u in nodes if u not in to_remove]
-                to_remove += rng.sample(remaining, n - len(to_remove))
-
-    elif strat == 'degree':
-        mode = params.get('mode', 'high')
-        degs = sorted(G.degree(), key=lambda x: x[1], reverse=(mode == 'high'))
-        candidates = [u for u, _ in degs]
-        to_remove = candidates[:n]
-
-    elif strat == 'centrality':
-        centrality = nx.betweenness_centrality(G)
-        sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
-        to_remove = [u for u, _ in sorted_nodes[:n]]
-
-    elif strat == 'role':
-        role = params.get('role')
-        if role is None:
-            # fallback to random
-            to_remove = rng.sample(nodes, n)
-        else:
-            candidates = [u for u in nodes if G.nodes[u].get('role') == role]
-            if len(candidates) >= n:
-                to_remove = rng.sample(candidates, n)
-            else:
-                to_remove = candidates + rng.sample([u for u in nodes if u not in candidates], n - len(candidates))
-
-    elif strat == 'by_attribute':
-        attr = params.get('attr')
-        value = params.get('value')
-        if attr is None:
-            to_remove = rng.sample(nodes, n)
-        else:
-            candidates = [u for u in nodes if G.nodes[u].get(attr) == value]
-            if len(candidates) >= n:
-                to_remove = rng.sample(candidates, n)
-            else:
-                to_remove = candidates + rng.sample([u for u in nodes if u not in candidates], n - len(candidates))
-
-    else:
-        # unknown strategy: fallback to random
-        to_remove = rng.sample(nodes, n)
+    to_remove = strat(G, n, params, rng)
 
     # perform removal
     G.remove_nodes_from(to_remove)
