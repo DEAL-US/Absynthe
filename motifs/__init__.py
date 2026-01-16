@@ -5,3 +5,11 @@ from .star_motif_generator import StarMotifGenerator
 from .gate_motif_generator import GateMotifGenerator
 
 __all__ = ['CycleMotifGenerator', 'HouseMotifGenerator', 'ChainMotifGenerator', 'StarMotifGenerator', 'GateMotifGenerator']
+
+motif_generators = {
+    "cycle": CycleMotifGenerator,
+    "house": HouseMotifGenerator,
+    "chain": ChainMotifGenerator,
+    "star": StarMotifGenerator,
+    "gate": GateMotifGenerator,
+}

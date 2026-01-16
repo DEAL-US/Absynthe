@@ -2,15 +2,7 @@ import random
 from typing import List, Tuple, Dict, Optional
 import networkx as nx
 from statistics import mean
-from .perturbation_strategies import (
-    random_strategy,
-    motif_strategy,
-    degree_strategy,
-    centrality_strategy,
-    role_strategy,
-    by_attribute_strategy,
-    STRATEGY_MAP
-)
+from .perturbation_strategies import STRATEGY_MAP
 
 def remove_nodes(graph: nx.Graph,
                  n: int,

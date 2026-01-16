@@ -2,7 +2,7 @@ import networkx as nx
 from graph_generator import GraphGenerator
 from graph.label_engine import LabelEngine
 from node_remover import NodeRemover
-from motifs import CycleMotifGenerator, HouseMotifGenerator, ChainMotifGenerator, StarMotifGenerator, GateMotifGenerator
+from motifs import motif_generators
 from typing import List, Dict, Type, Optional, Tuple
 from collections import defaultdict
 from graph.perturbation_engine import remove_nodes, perturb_edges
@@ -16,13 +16,7 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
 
     def __init__(self, motifs: List[List] = None):
         self.motifs = motifs or []
-        self.generators: Dict[str, Type] = {
-            "cycle": CycleMotifGenerator,
-            "house": HouseMotifGenerator,
-            "chain": ChainMotifGenerator,
-            "star": StarMotifGenerator,
-            "gate": GateMotifGenerator,
-        }
+        self.generators = motif_generators
 
     def generate_graph(self, num_extra_vertices: int = 0, num_extra_edges: int = 0, **kwargs) -> nx.Graph:
         """Generate a composite graph by combining motifs from the list, then adding extra vertices and edges.
@@ -96,34 +90,6 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
             combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges)
 
         return combined_graph
-
-    def label_assignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
-        """Compute and store the expected ground-truth labels for the (unperturbed) graph.
-
-        This runs the same labeling logic as `assign_label` and stores the resulting
-        label for each node under the attribute `expected_ground_truth`.
-
-        Returns the same graph with attributes written for convenience.
-        """
-        labels = self.assign_label(graph, node_list=node_list, **kwargs)
-        for node, label in labels.items():
-            graph.nodes[node]['expected_ground_truth'] = label
-            graph.nodes[node]['label'] = label
-        return graph
-
-    def label_reassignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
-        """Compute and store the observed ground-truth labels after perturbations.
-
-        Runs the labeling logic (same as `assign_label`) and stores the resulting
-        label for each node under `observed_ground_truth`.
-
-        Returns the same graph with attributes written for convenience.
-        """
-        labels = self.assign_label(graph, node_list=node_list, **kwargs)
-        for node, label in labels.items():
-            graph.nodes[node]['observed_ground_truth'] = label
-            graph.nodes[node]['label'] = label
-        return graph
 
     def remove_important_nodes(self, graph: nx.Graph, n: int) -> Optional[Tuple[nx.Graph, List[int]]]:
         """Remove n random nodes from the graph and reassign labels to the remaining nodes.

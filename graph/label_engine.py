@@ -86,3 +86,30 @@ class LabelEngine(NodeLabelAssigner):
                                 if x != v and x > w and graph.has_edge(u, x):
                                     cycles.add(frozenset([u, v, w, x]))
         return list(cycles)
+
+    def label_assignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
+        """Compute and store the expected ground-truth labels for the (unperturbed) graph.
+
+        This runs the same labeling logic as `assign_label` and stores the resulting
+        label for each node under the attribute `expected_ground_truth`.
+
+        Returns the same graph with attributes written for convenience.
+        """
+        labels = self.assign_label(graph, node_list=node_list, **kwargs)
+        for node, label in labels.items():
+            graph.nodes[node]['expected_ground_truth'] = label
+        return graph
+
+    def label_reassignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
+        """Compute and store the observed ground-truth labels after perturbations.
+
+        Runs the labeling logic (same as `assign_label`) and stores the resulting
+        label for each node under `observed_ground_truth`.
+
+        Returns the same graph with attributes written for convenience.
+        """
+        labels = self.assign_label(graph, node_list=node_list, **kwargs)
+        for node, label in labels.items():
+            graph.nodes[node]['observed_ground_truth'] = label
+            graph.nodes[node]['label'] = label
+        return graph
