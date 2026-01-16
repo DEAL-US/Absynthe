@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict, Optional
 import networkx as nx
 from statistics import mean
 from .perturbation_strategies import STRATEGY_MAP
+from .label_engine import LabelEngine
 
 def remove_nodes(graph: nx.Graph,
                  n: int,
@@ -80,3 +81,48 @@ def perturb_edges(graph: nx.Graph,
                     G.add_edge(u, v)
 
     return G
+
+class GraphPerturbation:
+    def __init__(self, graph: nx.Graph, num_nodes_to_remove: int, strategy: str, max_iterations: int):
+        """
+        Initialize the GraphPerturbation class.
+
+        :param graph: The input graph to perturb.
+        :param num_nodes_to_remove: Number of nodes to remove in each perturbation.
+        :param strategy: Strategy for selecting nodes to remove.
+        :param max_iterations: Maximum number of iterations to find a valid perturbation.
+        """
+        self.graph = graph
+        self.num_nodes_to_remove = num_nodes_to_remove
+        self.strategy = strategy
+        self.max_iterations = max_iterations
+
+    def perturb_and_check(self):
+        """
+        Perform perturbations on the graph and check if any node's class changes.
+
+        :return: Tuple containing the perturbed graph and a dictionary with details of the perturbation.
+        """
+        label_engine = LabelEngine()
+        original_labels = label_engine.assign_label(self.graph)
+
+        for iteration in range(self.max_iterations):
+            perturbed_graph, removed_nodes = remove_nodes(
+                self.graph, self.num_nodes_to_remove, self.strategy
+            )
+
+            perturbed_labels = label_engine.assign_label(perturbed_graph)
+
+            changed_nodes = {
+                node: (original_labels[node], perturbed_labels[node])
+                for node in perturbed_labels
+                if perturbed_labels[node] != original_labels.get(node)
+            }
+
+            if changed_nodes:
+                return perturbed_graph, {
+                    "removed_nodes": removed_nodes,
+                    "changed_nodes": changed_nodes,
+                }
+
+        return None, {"message": "No valid perturbation found after maximum iterations."}

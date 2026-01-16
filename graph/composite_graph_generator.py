@@ -91,25 +91,26 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
 
         return combined_graph
 
-    def remove_important_nodes(self, graph: nx.Graph, n: int) -> Optional[Tuple[nx.Graph, List[int]]]:
-        """Remove n random nodes from the graph and reassign labels to the remaining nodes.
-        If n >= 2, remove nodes from the same motif (same motif_id).
-        If any node's label has changed, return the modified graph and the list of removed nodes.
-        Otherwise, return None.
+    def remove_important_nodes(self, graph: nx.Graph, n: int, strategy: str = 'motif', max_iterations: int = 10) -> Optional[Tuple[nx.Graph, Dict]]:
+        """
+        Remove important nodes using the GraphPerturbation class.
 
         Args:
             graph (nx.Graph): The input graph.
             n (int): The number of nodes to remove.
+            strategy (str): Strategy for selecting nodes to remove.
+            max_iterations (int): Maximum number of iterations to find a valid perturbation.
 
         Returns:
-            Optional[Tuple[nx.Graph, List[int]]]: The modified graph and list of removed nodes if labels changed, else None.
+            Optional[Tuple[nx.Graph, Dict]]: The perturbed graph and details of the perturbation if successful, else None.
         """
-        # Use the new perturbation engine: default strategy is 'motif' to preserve previous behaviour
-        # Use the generator's RNG for reproducibility
-        graph_copy, nodes_removed = remove_nodes(graph, n, strategy='motif', params=None)
+        from graph.perturbation_engine import GraphPerturbation
 
-        # Reassign labels to the remaining nodes (persist as observed_ground_truth)
-        graph_copy = self.label_reassignment(graph_copy)
+        perturbation = GraphPerturbation(graph, n, strategy, max_iterations)
+        perturbed_graph, result = perturbation.perturb_and_check()
 
-        return (graph_copy, nodes_removed)
+        if perturbed_graph:
+            return perturbed_graph, result
+
+        return None
 
