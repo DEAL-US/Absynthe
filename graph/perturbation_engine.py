@@ -9,38 +9,44 @@ def remove_nodes(graph: nx.Graph,
                  n: int,
                  strategy: str = 'motif',
                  params: Optional[Dict] = None,
-                 rng: Optional[random.Random] = None) -> Tuple[nx.Graph, List[int]]:
+                 rng: Optional[random.Random] = None,
+                 node_list: Optional[List[int]] = None) -> Tuple[nx.Graph, List[int]]:
     """Remove n nodes according to the requested strategy and return (new_graph, removed_nodes).
 
-    Strategies:
-    - 'random': uniform random sampling
-    - 'motif': prefer removing nodes from the same motif_id (like previous behavior)
-    - 'degree': remove nodes with highest ('mode'='high') or lowest ('mode'='low') degree
-    - 'centrality': remove nodes with highest betweenness centrality
-    - 'role': remove nodes matching attribute 'role' == params['role'] (sample among them if > n)
-    - 'by_attribute': remove nodes where node[attr]==value (params: attr, value)
+    Args:
+        graph (nx.Graph): The input graph.
+        n (int): Number of nodes to remove.
+        strategy (str): Strategy for selecting nodes to remove.
+        params (Optional[Dict]): Additional parameters for the strategy.
+        rng (Optional[random.Random]): Random number generator.
+        node_list (Optional[List[int]]): Subset of nodes to consider for removal.
 
-    Fallback: if the strategy cannot find enough nodes, it will fill with random nodes.
+    Returns:
+        Tuple[nx.Graph, List[int]]: The perturbed graph and the list of removed nodes.
     """
     params = params or {}
     rng = rng or random
 
     G = graph.copy()
-    nodes = list(G.nodes())
+
+    # Determine the nodes to consider
+    nodes = node_list if node_list is not None else list(G.nodes())
+
     n = min(n, len(nodes))
 
     if n == 0:
-        return (G, [])
+        return G, []
 
     strat = STRATEGY_MAP.get((strategy or 'random').lower())
     if not strat:
         raise ValueError(f"Unknown strategy: {strategy}")
 
-    to_remove = strat(G, n, params, rng)
+    # Apply the strategy to the filtered nodes
+    to_remove = strat(G.subgraph(nodes), n, params, rng)
 
-    # perform removal
+    # Perform removal
     G.remove_nodes_from(to_remove)
-    return (G, to_remove)
+    return G, to_remove
 
 
 def perturb_edges(graph: nx.Graph,
