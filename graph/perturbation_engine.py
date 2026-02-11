@@ -110,14 +110,14 @@ class GraphPerturbation:
         :return: Tuple containing the perturbed graph and a dictionary with details of the perturbation.
         """
         label_engine = LabelEngine()
-        original_labels = label_engine.assign_label(self.graph)
+        original_labels = label_engine.assign_labels(self.graph)
 
         for iteration in range(self.max_iterations):
             perturbed_graph, removed_nodes = remove_nodes(
                 self.graph, self.num_nodes_to_remove, self.strategy
             )
 
-            perturbed_labels = label_engine.assign_label(perturbed_graph)
+            perturbed_labels = label_engine.assign_labels(perturbed_graph)
 
             changed_nodes = {
                 node: (original_labels[node], perturbed_labels[node])

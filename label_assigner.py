@@ -29,7 +29,7 @@ class NodeLabelAssigner(abc.ABC):
     """
 
     @abc.abstractmethod
-    def assign_label(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> Dict[int, int]:
+    def assign_labels(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> Dict[int, int]:
         """Compute labels for nodes in the graph and return a mapping node->label.
 
         This method should NOT mutate the input graph; use `label_assignment` or
