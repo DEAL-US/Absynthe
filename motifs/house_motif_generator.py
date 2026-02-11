@@ -1,5 +1,6 @@
 import networkx as nx
 from motif_generator import MotifGenerator
+from motifs.utils import assign_labels_to_motif
 
 
 class HouseMotifGenerator(MotifGenerator):
@@ -34,3 +35,11 @@ class HouseMotifGenerator(MotifGenerator):
             graph.nodes[node]['motif'] = 'house'
             graph.nodes[node]['motif_id'] = f'house_{id}'
         return graph
+
+    @staticmethod
+    def assign_labels(graph):
+        """
+        Busca subgrafos con forma de 'house' y etiqueta sus nodos.
+        """
+        motif = HouseMotifGenerator().generate_motif(0)
+        assign_labels_to_motif(graph, motif, 'house')

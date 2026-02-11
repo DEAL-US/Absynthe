@@ -1,5 +1,6 @@
 import networkx as nx
 from motif_generator import MotifGenerator
+from motifs.utils import assign_labels_to_motif
 
 
 class ChainMotifGenerator(MotifGenerator):
@@ -36,3 +37,11 @@ class ChainMotifGenerator(MotifGenerator):
             graph.nodes[node]['motif_id'] = f'chain_{length}_{id}'
 
         return graph
+
+    @staticmethod
+    def assign_labels(graph):
+        """
+        Identifica cadenas (paths) en el grafo y asigna etiquetas a sus nodos.
+        """
+        motif = ChainMotifGenerator().generate_motif(0, 3)  # ejemplo: path de 3 nodos
+        assign_labels_to_motif(graph, motif, 'chain')

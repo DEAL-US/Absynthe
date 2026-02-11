@@ -1,5 +1,6 @@
 import networkx as nx
 from motif_generator import MotifGenerator
+from motifs.utils import assign_labels_to_motif
 
 
 class StarMotifGenerator(MotifGenerator):
@@ -39,3 +40,11 @@ class StarMotifGenerator(MotifGenerator):
             graph.nodes[node]['motif_id'] = f'star_{num_leaves}_{id}'
 
         return graph
+
+    @staticmethod
+    def assign_labels(graph):
+        """
+        Identifica motivos tipo star en el grafo y asigna etiquetas a sus nodos.
+        """
+        motif = StarMotifGenerator().generate_motif(0, 3)  # ejemplo: estrella con 3 hojas
+        assign_labels_to_motif(graph, motif, 'star')

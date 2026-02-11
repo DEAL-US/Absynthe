@@ -1,5 +1,6 @@
 import networkx as nx
 from motif_generator import MotifGenerator
+from motifs.utils import assign_labels_to_motif
 
 
 class GateMotifGenerator(MotifGenerator):
@@ -69,3 +70,11 @@ class GateMotifGenerator(MotifGenerator):
             graph.nodes[node]['motif_id'] = motif_id
 
         return graph
+
+    @staticmethod
+    def assign_labels(graph):
+        """
+        Identifica motivos tipo gate en el grafo y asigna etiquetas a sus nodos.
+        """
+        motif = GateMotifGenerator().generate_motif(0, 1)  # ejemplo: gate con brazo de longitud 1
+        assign_labels_to_motif(graph, motif, 'gate')
