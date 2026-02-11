@@ -22,11 +22,11 @@ def visualize_graph(graph: nx.Graph, title: str = "Graph", filename: str = "pict
     node_colors = []
     for node in graph.nodes():
         label = graph.nodes[node].get('label', -1)
-        if label == 0:
+        if label == 'house':
             node_colors.append('red')  # House
-        elif label == 1:
+        elif label == 'cycle_3':
             node_colors.append('blue')  # Cycle_3
-        elif label == 2:
+        elif label == 'cycle_4':
             node_colors.append('green')  # Cycle_4
         else:
             node_colors.append('gray')  # Unknown

@@ -20,6 +20,5 @@ def assign_labels_to_motif(graph: nx.Graph, motif: nx.Graph, motif_name: str):
     motif_id = 0
     for subgraph in matcher.subgraph_isomorphisms_iter():
         for node in subgraph:
-            graph.nodes[node]['motif'] = motif_name
-            graph.nodes[node]['motif_id'] = f'{motif_name}_{motif_id}'
+            graph.nodes[node]['label'] = motif_name
         motif_id += 1

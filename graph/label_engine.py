@@ -7,6 +7,7 @@ class LabelEngine(NodeLabelAssigner):
     def assign_labels(self, graph: nx.Graph, motif_order: List[str] = None, node_list: Optional[List[int]] = None) -> Dict[int, str]:
         """
         Assign labels to nodes in the graph or a subgraph based on the specified motif order.
+        Starts labeling from the last motif in the order, allowing overwriting.
 
         Args:
             graph (nx.Graph): The graph where labels will be assigned.
@@ -18,6 +19,9 @@ class LabelEngine(NodeLabelAssigner):
         """
         if motif_order is None:
             motif_order = list(motif_generators.keys())
+
+        # Reverse the order to start labeling from the last motif
+        motif_order = motif_order[::-1]
 
         # Work on an induced subgraph if node_list is provided
         if node_list is not None:
@@ -31,6 +35,7 @@ class LabelEngine(NodeLabelAssigner):
             if generator_class:
                 generator_class.assign_labels(work_graph)
                 for node in work_graph.nodes():
+                    # Overwrite the label regardless of existing labels
                     node_labels[node] = work_graph.nodes[node].get('motif', 'unknown')
             else:
                 print(f"Motif '{motif_name}' not found in motif_generators.")

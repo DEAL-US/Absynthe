@@ -91,7 +91,7 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
 
         return combined_graph
 
-    def remove_important_nodes(self, graph: nx.Graph, n: int, strategy: str = 'motif', max_iterations: int = 10) -> Optional[Tuple[nx.Graph, Dict]]:
+    def remove_important_nodes(self, graph: nx.Graph, n: int, strategy: str = 'motif', max_iterations: int = 10) -> Tuple[nx.Graph, Dict]:
         """
         Remove important nodes using the GraphPerturbation class.
 
@@ -102,7 +102,7 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
             max_iterations (int): Maximum number of iterations to find a valid perturbation.
 
         Returns:
-            Optional[Tuple[nx.Graph, Dict]]: The perturbed graph and details of the perturbation if successful, else None.
+            Tuple[nx.Graph, Dict]: The perturbed graph and details of the perturbation. If unsuccessful, returns the original graph and an empty dictionary.
         """
         from graph.perturbation_engine import GraphPerturbation
 
@@ -112,5 +112,6 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
         if perturbed_graph:
             return perturbed_graph, result
 
-        return None
+        # Return the original graph and an empty dictionary if perturbation fails
+        return graph, {}
 
