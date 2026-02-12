@@ -2,6 +2,7 @@ import networkx as nx
 from typing import Optional, List, Dict
 from label_assigner import NodeLabelAssigner
 from motifs import motif_generators
+from graph.utils import parse_motif_name
 
 class LabelEngine(NodeLabelAssigner):
     def assign_labels(self, graph: nx.Graph, motif_order: List[str] = None, node_list: Optional[List[int]] = None) -> Dict[int, str]:
@@ -30,13 +31,18 @@ class LabelEngine(NodeLabelAssigner):
             work_graph = graph
 
         node_labels = {}
+        
         for motif_name in motif_order:
-            generator_class = motif_generators.get(motif_name)
+            base_name, args = parse_motif_name(motif_name)
+            generator_class = motif_generators.get(base_name)
             if generator_class:
-                generator_class.assign_labels(work_graph)
+                if hasattr(generator_class, 'assign_labels'):
+                    generator_class.assign_labels(work_graph, *args)
+                else:
+                    print(f"Motif generator '{base_name}' does not have an assign_labels method.")
                 for node in work_graph.nodes():
                     # Overwrite the label regardless of existing labels
-                    node_labels[node] = work_graph.nodes[node].get('motif', 'unknown')
+                    node_labels[node] = work_graph.nodes[node].get('label', 'unknown')
             else:
                 print(f"Motif '{motif_name}' not found in motif_generators.")
 
@@ -48,7 +54,8 @@ class LabelEngine(NodeLabelAssigner):
         return node_labels
 
 
-    def label_assignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
+
+    def label_assignment(self, graph: nx.Graph, motif_order: Optional[List[str]] = None, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
         """Compute and store the expected ground-truth labels for the (unperturbed) graph.
 
         This runs the same labeling logic as `assign_label` and stores the resulting
@@ -56,12 +63,13 @@ class LabelEngine(NodeLabelAssigner):
 
         Returns the same graph with attributes written for convenience.
         """
-        labels = self.assign_labels(graph, node_list=node_list, **kwargs)
+        labels = self.assign_labels(graph, motif_order=motif_order, node_list=node_list, **kwargs)
         for node, label in labels.items():
             graph.nodes[node]['expected_ground_truth'] = label
         return graph
 
-    def label_reassignment(self, graph: nx.Graph, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
+
+    def label_reassignment(self, graph: nx.Graph, motif_order: Optional[List[str]] = None, node_list: Optional[List[int]] = None, **kwargs) -> nx.Graph:
         """Compute and store the observed ground-truth labels after perturbations.
 
         Runs the labeling logic (same as `assign_label`) and stores the resulting
@@ -69,7 +77,7 @@ class LabelEngine(NodeLabelAssigner):
 
         Returns the same graph with attributes written for convenience.
         """
-        labels = self.assign_labels(graph, node_list=node_list, **kwargs)
+        labels = self.assign_labels(graph, motif_order=motif_order, node_list=node_list, **kwargs)
         for node, label in labels.items():
             graph.nodes[node]['observed_ground_truth'] = label
             graph.nodes[node]['label'] = label

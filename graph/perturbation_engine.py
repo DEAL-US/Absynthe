@@ -88,8 +88,10 @@ def perturb_edges(graph: nx.Graph,
 
     return G
 
+
 class GraphPerturbation:
-    def __init__(self, graph: nx.Graph, num_nodes_to_remove: int, strategy: str, max_iterations: int):
+    def __init__(self, graph: nx.Graph, num_nodes_to_remove: int, strategy: str, max_iterations: int,
+                 edge_perturb_params: Optional[dict] = None, edge_perturb_position: str = "after"):
         """
         Initialize the GraphPerturbation class.
 
@@ -97,11 +99,15 @@ class GraphPerturbation:
         :param num_nodes_to_remove: Number of nodes to remove in each perturbation.
         :param strategy: Strategy for selecting nodes to remove.
         :param max_iterations: Maximum number of iterations to find a valid perturbation.
+        :param edge_perturb_params: Dict with any of 'p_remove', 'p_add', 'add_num' for edge perturbation.
+        :param edge_perturb_position: 'before', 'after' or None. When to apply edge perturbation relative to node removal.
         """
         self.graph = graph
         self.num_nodes_to_remove = num_nodes_to_remove
         self.strategy = strategy
         self.max_iterations = max_iterations
+        self.edge_perturb_params = edge_perturb_params or {}
+        self.edge_perturb_position = edge_perturb_position
 
     def perturb_and_check(self):
         """
@@ -113,11 +119,38 @@ class GraphPerturbation:
         original_labels = label_engine.assign_labels(self.graph)
 
         for iteration in range(self.max_iterations):
-            perturbed_graph, removed_nodes = remove_nodes(
-                self.graph, self.num_nodes_to_remove, self.strategy
+            g = self.graph.copy()
+            removed_nodes = []
+            edge_perturb_info = {}
+
+            # Edge perturbation BEFORE node removal
+            if self.edge_perturb_position == "before" and self.edge_perturb_params:
+                g_before = g.copy()
+                g = perturb_edges(
+                    g,
+                    p_remove=self.edge_perturb_params.get("p_remove", 0.0),
+                    p_add=self.edge_perturb_params.get("p_add", 0.0),
+                    add_num=self.edge_perturb_params.get("add_num", None),
+                )
+                edge_perturb_info["before"] = self._get_edge_diff(g_before, g)
+
+            # Node removal
+            g, removed_nodes = remove_nodes(
+                g, self.num_nodes_to_remove, self.strategy
             )
 
-            perturbed_labels = label_engine.assign_labels(perturbed_graph)
+            # Edge perturbation AFTER node removal
+            if self.edge_perturb_position == "after" and self.edge_perturb_params:
+                g_before = g.copy()
+                g = perturb_edges(
+                    g,
+                    p_remove=self.edge_perturb_params.get("p_remove", 0.0),
+                    p_add=self.edge_perturb_params.get("p_add", 0.0),
+                    add_num=self.edge_perturb_params.get("add_num", None),
+                )
+                edge_perturb_info["after"] = self._get_edge_diff(g_before, g)
+
+            perturbed_labels = label_engine.assign_labels(g)
 
             changed_nodes = {
                 node: (original_labels[node], perturbed_labels[node])
@@ -126,9 +159,18 @@ class GraphPerturbation:
             }
 
             if changed_nodes:
-                return perturbed_graph, {
+                return g, {
                     "removed_nodes": removed_nodes,
                     "changed_nodes": changed_nodes,
+                    "edge_perturb_info": edge_perturb_info,
                 }
 
-        return None, {"message": "No valid perturbation found after maximum iterations."}
+        return g, {"message": "No valid perturbation found after maximum iterations."}
+
+    @staticmethod
+    def _get_edge_diff(g_before, g_after):
+        before_edges = set(g_before.edges())
+        after_edges = set(g_after.edges())
+        removed = list(before_edges - after_edges)
+        added = list(after_edges - before_edges)
+        return {"removed_edges": removed, "added_edges": added}
