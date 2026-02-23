@@ -75,6 +75,12 @@ export function GraphBuilderPage() {
 
   const removeMotif = (idx: number) => setMotifs((prev) => prev.filter((_, i) => i !== idx))
 
+  const parseParam = (type: string, value: string): number | string => {
+    if (type === 'int') return Number.parseInt(value || '0', 10)
+    if (type === 'float') return Number.parseFloat(value || '0')
+    return value
+  }
+
   return (
     <PageContainer split>
       {/* ── Left: Config ──────────────────────────────────── */}
@@ -139,9 +145,14 @@ export function GraphBuilderPage() {
             <Input
               key={p.name}
               label={p.label}
-              type="number"
+              type={p.type === 'string' ? 'text' : 'number'}
               value={String(compParams[p.name] ?? p.default)}
-              onChange={(e) => setCompParams((prev) => ({ ...prev, [p.name]: Number(e.target.value) }))}
+              onChange={(e) =>
+                setCompParams((prev) => ({
+                  ...prev,
+                  [p.name]: parseParam(p.type, e.target.value),
+                }))
+              }
             />
           ))}
         </div>

@@ -1,21 +1,36 @@
 """Label assignment service."""
 import web.backend.services  # noqa: F401
 
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+import networkx as nx
+
+from web.backend.models.graph_models import LabelingFunctionConfig
 from web.backend.services import graph_store, serialization
+from web.backend.services.registry import build_labeling_functions
 
 
-def assign(graph_id: str, motif_order: Optional[List[str]] = None) -> Tuple[str, list, dict]:
-    """Assign *expected* ground-truth labels. Mutates stored graph in-place.
+def _apply_labels(
+    graph: nx.Graph,
+    labeling_configs: List[LabelingFunctionConfig],
+    attribute_name: str,
+) -> None:
+    labelers = build_labeling_functions(labeling_configs)
+    for labeler in labelers:
+        labels = labeler.compute_labels(graph)
+        for node, label in labels.items():
+            if node in graph:
+                graph.nodes[node][attribute_name] = label
+                graph.nodes[node]["label"] = label
 
-    Returns (graph_id, updated_elements, label_distribution).
-    """
-    from graph.label_engine import LabelEngine
 
+def assign(
+    graph_id: str,
+    labeling_functions: List[LabelingFunctionConfig],
+) -> Tuple[str, list, dict]:
+    """Assign expected labels. Mutates stored graph in place."""
     graph = graph_store.get(graph_id)
-    engine = LabelEngine()
-    engine.label_assignment(graph, motif_order=motif_order)
+    _apply_labels(graph, labeling_functions, "expected_ground_truth")
     graph_store.update(graph_id, graph)
 
     elements = serialization.graph_to_elements(graph)
@@ -23,16 +38,13 @@ def assign(graph_id: str, motif_order: Optional[List[str]] = None) -> Tuple[str,
     return graph_id, elements, dist
 
 
-def reassign(graph_id: str, motif_order: Optional[List[str]] = None) -> Tuple[str, list, dict]:
-    """Assign *observed* ground-truth labels after perturbation.
-
-    Returns (graph_id, updated_elements, label_distribution).
-    """
-    from graph.label_engine import LabelEngine
-
+def reassign(
+    graph_id: str,
+    labeling_functions: List[LabelingFunctionConfig],
+) -> Tuple[str, list, dict]:
+    """Assign observed labels after perturbation. Mutates stored graph in place."""
     graph = graph_store.get(graph_id)
-    engine = LabelEngine()
-    engine.label_reassignment(graph, motif_order=motif_order)
+    _apply_labels(graph, labeling_functions, "observed_ground_truth")
     graph_store.update(graph_id, graph)
 
     elements = serialization.graph_to_elements(graph)

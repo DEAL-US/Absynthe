@@ -16,13 +16,15 @@ export interface CytoscapeElement {
   group: 'nodes' | 'edges'
   data: CytoscapeElementData
   classes?: string
+  position?: { x: number; y: number }
 }
 
-// Capabilities
-export interface MotifParam {
+export type ParamType = 'int' | 'float' | 'string' | 'select'
+
+export interface ParamSchema {
   name: string
   label: string
-  type: 'int' | 'float' | 'string' | 'select'
+  type: ParamType
   default: number | string
   min?: number
   max?: number
@@ -33,27 +35,51 @@ export interface MotifSchema {
   type: string
   label: string
   description: string
-  params: MotifParam[]
+  params: ParamSchema[]
 }
 
 export interface StrategySchema {
   id: string
   label: string
   description: string
-  params: MotifParam[]
+  params: ParamSchema[]
 }
 
 export interface CompositionSchema {
   id: string
   label: string
   description: string
-  params: MotifParam[]
+  params: ParamSchema[]
 }
 
-// Graph generation
+export interface LabelingFunctionSchema {
+  id: string
+  label: string
+  description: string
+  params: ParamSchema[]
+}
+
+export interface PerturbationSchema {
+  id: string
+  label: string
+  description: string
+  params: ParamSchema[]
+}
+
 export interface MotifConfig {
   type: string
   params: (number | string)[]
+}
+
+export interface LabelingFunctionConfig {
+  type: string
+  params: Record<string, unknown>
+}
+
+export interface PerturbationConfig {
+  type: string
+  params: Record<string, unknown>
+  count: number
 }
 
 export interface GraphGenerateRequest {
@@ -77,10 +103,9 @@ export interface GraphGenerateResponse {
   stats: GraphStats
 }
 
-// Labels
 export interface LabelAssignRequest {
   graph_id: string
-  motif_order?: string[]
+  labeling_functions: LabelingFunctionConfig[]
 }
 
 export interface LabelDistribution {
@@ -93,21 +118,11 @@ export interface LabeledGraphResponse {
   label_distribution: LabelDistribution
 }
 
-// Perturbation
-export interface EdgePerturbParams {
-  p_remove: number
-  p_add: number
-  add_num?: number
-}
-
 export interface PerturbationRequest {
   graph_id: string
-  num_nodes_to_remove: number
-  strategy: string
-  strategy_params: Record<string, unknown>
+  labeling_functions: LabelingFunctionConfig[]
+  perturbations: PerturbationConfig[]
   max_iterations: number
-  edge_perturb_params?: EdgePerturbParams
-  edge_perturb_position: string
 }
 
 export interface ChangedNode {
@@ -126,6 +141,19 @@ export interface EdgePerturbInfo {
   added_edges: EdgeChange[]
 }
 
+export interface PerturbationPreview {
+  config_index: number
+  perturbation_type: string
+  desired_count: number
+  success: boolean
+  message: string
+  original_elements: CytoscapeElement[]
+  perturbed_elements: CytoscapeElement[]
+  removed_nodes: string[]
+  changed_nodes: ChangedNode[]
+  edge_perturb_info: Record<string, EdgePerturbInfo>
+}
+
 export interface PerturbationResponse {
   original_graph_id: string
   perturbed_graph_id: string
@@ -134,26 +162,21 @@ export interface PerturbationResponse {
   removed_nodes: string[]
   changed_nodes: ChangedNode[]
   edge_perturb_info: Record<string, EdgePerturbInfo>
+  previews: PerturbationPreview[]
   success: boolean
   message: string
-}
-
-// Dataset
-export interface DatasetPerturbParams {
-  num_nodes_to_remove: number
-  strategy: string
-  strategy_params: Record<string, unknown>
-  max_iterations: number
-  edge_perturb_params?: EdgePerturbParams
-  edge_perturb_position: string
 }
 
 export interface DatasetGenerateRequest {
   num_graphs: number
   motifs: MotifConfig[]
+  composition: string
+  composition_params: Record<string, unknown>
   num_extra_vertices: number
   num_extra_edges: number
-  perturbation_params?: DatasetPerturbParams
+  labeling_functions: LabelingFunctionConfig[]
+  perturbations: PerturbationConfig[]
+  max_perturbation_iterations: number
   output_dir: string
 }
 

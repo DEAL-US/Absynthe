@@ -1,5 +1,4 @@
 import { X } from 'lucide-react'
-import { Badge } from '@/components/ui/Badge'
 import { getLabelColor } from '@/lib/color-map'
 
 interface GraphInfoPanelProps {

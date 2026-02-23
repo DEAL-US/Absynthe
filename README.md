@@ -44,7 +44,33 @@ Note: the framework now uses a single global seed defined in `test_graph.py` (va
 - `motifs/`: motif generators.
 - `utils/`: helper utilities such as `graph_utils.py`.
 - Root scripts: `graph_generator.py`, `motif_generator.py`, `label_assigner.py`, `node_remover.py`, plus tests.
+- `web/`: (optional) web interface for interactive graph generation.
 
+## Web interface deployment
+### Development (two terminals):
+**Terminal 1 — backend (from project root):**
+```bash
+pip install -r requirements-web.txt
+uvicorn web.backend.app:app --reload --port 8000
+```
+
+**Terminal 2 — frontend:**
+```bash
+cd web/frontend
+npm install
+npm run dev          # → http://localhost:5173
+```
+
+### Production (single command):
+```bash
+pip install -r requirements-web.txt
+python -m web        # builds frontend then serves everything at :8000
+```
+
+### Docker:
+```bash
+docker compose up    # → http://localhost:8000
+```
 
 ## License
 This repository is licensed under the GNU General Public License v3.0 (GPL-3.0).

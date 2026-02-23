@@ -1,25 +1,23 @@
-"""Request / response models for the perturbation endpoints."""
-from typing import Any, Dict, List, Optional, Tuple
+"""Request / response models for perturbation endpoints."""
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
 from web.backend.models.common import CytoscapeElement
+from web.backend.models.graph_models import LabelingFunctionConfig
 
 
-class EdgePerturbParams(BaseModel):
-    p_remove: float = Field(0.0, ge=0.0, le=1.0)
-    p_add: float = Field(0.0, ge=0.0, le=1.0)
-    add_num: Optional[int] = Field(None, ge=0)
+class PerturbationConfig(BaseModel):
+    type: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+    count: int = Field(1, ge=1)
 
 
 class PerturbationRequest(BaseModel):
     graph_id: str
-    num_nodes_to_remove: int = Field(1, ge=1)
-    strategy: str = "random"
-    strategy_params: Dict[str, Any] = Field(default_factory=dict)
-    max_iterations: int = Field(10, ge=1, le=100)
-    edge_perturb_params: Optional[EdgePerturbParams] = None
-    edge_perturb_position: str = "after"  # "before", "after", or "none"
+    labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
+    perturbations: List[PerturbationConfig] = Field(..., min_length=1)
+    max_iterations: int = Field(10, ge=1, le=200)
 
 
 class ChangedNode(BaseModel):
@@ -38,6 +36,19 @@ class EdgePerturbInfo(BaseModel):
     added_edges: List[EdgeChange] = Field(default_factory=list)
 
 
+class PerturbationPreview(BaseModel):
+    config_index: int
+    perturbation_type: str
+    desired_count: int
+    success: bool
+    message: str = ""
+    original_elements: List[CytoscapeElement]
+    perturbed_elements: List[CytoscapeElement]
+    removed_nodes: List[str]
+    changed_nodes: List[ChangedNode]
+    edge_perturb_info: Dict[str, EdgePerturbInfo] = Field(default_factory=dict)
+
+
 class PerturbationResponse(BaseModel):
     original_graph_id: str
     perturbed_graph_id: str
@@ -46,10 +57,6 @@ class PerturbationResponse(BaseModel):
     removed_nodes: List[str]
     changed_nodes: List[ChangedNode]
     edge_perturb_info: Dict[str, EdgePerturbInfo] = Field(default_factory=dict)
+    previews: List[PerturbationPreview] = Field(default_factory=list)
     success: bool
     message: str = ""
-
-
-class LabelAssignRequest(BaseModel):
-    graph_id: str
-    motif_order: Optional[List[str]] = None

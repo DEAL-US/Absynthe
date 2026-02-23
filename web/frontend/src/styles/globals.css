@@ -56,3 +56,68 @@
   width: 100% !important;
   height: 100% !important;
 }
+
+/* Light theme compatibility for legacy dark-first utility classes. */
+.app-theme-light {
+  color-scheme: light;
+}
+
+.app-theme-light [class*="bg-gray-950"] {
+  background-color: #f8fafc !important;
+}
+
+.app-theme-light [class*="bg-gray-900"] {
+  background-color: #e2e8f0 !important;
+}
+
+.app-theme-light [class*="bg-white/5"] {
+  background-color: rgba(255, 255, 255, 0.64) !important;
+}
+
+.app-theme-light [class*="bg-white/10"] {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.app-theme-light [class*="bg-white/15"] {
+  background-color: rgba(15, 23, 42, 0.2) !important;
+}
+
+.app-theme-light main {
+  background-color: #e2e8f0 !important;
+}
+
+.app-theme-light [class*="text-gray-100"] {
+  color: #0f172a !important;
+}
+
+.app-theme-light [class*="text-gray-200"] {
+  color: #1e293b !important;
+}
+
+.app-theme-light [class*="text-gray-300"] {
+  color: #334155 !important;
+}
+
+.app-theme-light [class*="text-gray-400"] {
+  color: #475569 !important;
+}
+
+.app-theme-light [class*="text-gray-500"] {
+  color: #64748b !important;
+}
+
+.app-theme-light [class*="text-gray-600"] {
+  color: #64748b !important;
+}
+
+.app-theme-light [class*="border-white/10"] {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+.app-theme-light [class*="border-white/15"] {
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+
+.app-theme-light [class*="border-white/20"] {
+  border-color: rgba(15, 23, 42, 0.2) !important;
+}

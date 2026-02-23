@@ -6,13 +6,18 @@ import threading
 import uuid
 from typing import Dict, Optional
 
+from graph.composite_graph_generator import MotifComposite
+from graph.dataset_generator import GraphDatasetGenerator
 from web.backend.models.dataset_models import DatasetGenerateRequest, TaskStatus
+from web.backend.services.registry import (
+    build_labeling_functions,
+    build_perturbations,
+    normalize_composition_params,
+)
 
 _tasks: Dict[str, dict] = {}
 _lock = threading.Lock()
 
-
-# ── Task lifecycle ───────────────────────────────────────────────────────────
 
 def create_task(total: int) -> str:
     task_id = str(uuid.uuid4())
@@ -48,82 +53,39 @@ def get_status(task_id: str) -> Optional[TaskStatus]:
     )
 
 
-# ── Generation worker (runs in background thread) ────────────────────────────
-
 def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
-    """Synchronous generation worker — called from FastAPI BackgroundTasks."""
-    import networkx as nx
-    from graph.composite_graph_generator import CompositeGraphGenerator
-    from graph.perturbation_engine import GraphPerturbation
-
-    _update(task_id, status="running")
+    """Synchronous generation worker called from FastAPI BackgroundTasks."""
+    _update(task_id, status="running", current=0)
 
     try:
         output_dir = os.path.abspath(request.output_dir)
-        graph_dir = os.path.join(output_dir, "graphs")
-        os.makedirs(graph_dir, exist_ok=True)
 
-        motif_lists = [m.to_list() for m in request.motifs]
-        metadata = []
+        graph_generator = MotifComposite(
+            motifs=[motif.to_list() for motif in request.motifs]
+        )
+        labeling_functions = build_labeling_functions(request.labeling_functions)
+        perturbations = build_perturbations(request.perturbations)
 
-        for i in range(request.num_graphs):
-            gen = CompositeGraphGenerator(motifs=motif_lists)
-            graph: nx.Graph = gen.generate_graph(
-                num_extra_vertices=request.num_extra_vertices,
-                num_extra_edges=request.num_extra_edges,
-            )
+        generator = GraphDatasetGenerator(
+            graph_generator=graph_generator,
+            labeling_functions=labeling_functions,
+            perturbations=perturbations,
+            output_dir=output_dir,
+            max_perturbation_iterations=request.max_perturbation_iterations,
+        )
+        generator.generate_dataset(
+            num_graphs=request.num_graphs,
+            num_extra_vertices=request.num_extra_vertices,
+            num_extra_edges=request.num_extra_edges,
+            composition=request.composition,
+            composition_params=normalize_composition_params(request.composition_params),
+        )
 
-            perturbation_info = None
-            if request.perturbation_params:
-                pp = request.perturbation_params
-                edge_params = None
-                if pp.edge_perturb_params:
-                    edge_params = {
-                        "p_remove": pp.edge_perturb_params.p_remove,
-                        "p_add": pp.edge_perturb_params.p_add,
-                        "add_num": pp.edge_perturb_params.add_num,
-                    }
-                perturb = GraphPerturbation(
-                    graph,
-                    pp.num_nodes_to_remove,
-                    pp.strategy,
-                    pp.max_iterations,
-                    edge_perturb_params=edge_params,
-                    edge_perturb_position=pp.edge_perturb_position,
-                )
-                graph, raw_info = perturb.perturb_and_check()
-                # Serialise to JSON-safe format
-                perturbation_info = {
-                    "removed_nodes": [str(n) for n in raw_info.get("removed_nodes", [])],
-                    "changed_nodes": {
-                        str(k): [str(v[0]), str(v[1])]
-                        for k, v in raw_info.get("changed_nodes", {}).items()
-                    },
-                    "edge_perturb_info": {
-                        phase: {
-                            "removed_edges": [[str(u), str(v)] for u, v in info.get("removed_edges", [])],
-                            "added_edges": [[str(u), str(v)] for u, v in info.get("added_edges", [])],
-                        }
-                        for phase, info in raw_info.get("edge_perturb_info", {}).items()
-                    },
-                }
-
-            graph_path = os.path.join(graph_dir, f"graph_{i}.graphml")
-            nx.write_graphml(graph, graph_path)
-
-            metadata.append({
-                "graph_id": i,
-                "graph_path": graph_path,
-                "perturbation_info": perturbation_info,
-            })
-
-            _update(task_id, current=i + 1)
-
-        import json
-        with open(os.path.join(output_dir, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
-
-        _update(task_id, status="completed", output_dir=output_dir)
-
+        _update(
+            task_id,
+            status="completed",
+            current=request.num_graphs,
+            output_dir=output_dir,
+        )
     except Exception as exc:  # noqa: BLE001
         _update(task_id, status="failed", error=str(exc))

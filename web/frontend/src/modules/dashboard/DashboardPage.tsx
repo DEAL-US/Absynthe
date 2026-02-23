@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Database, FlaskConical, Network, Tag } from 'lucide-react'
-import { getMotifs, getStrategies, getCompositions } from '@/api/capabilities'
+import {
+  getCompositions,
+  getLabelingFunctions,
+  getMotifs,
+  getPerturbations,
+} from '@/api/capabilities'
 import type { MotifSchema } from '@/api/types'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { getLabelColor } from '@/lib/color-map'
 import { useGraphState } from '@/hooks/useGraphState'
 
@@ -49,12 +53,14 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { graphId } = useGraphState()
   const [motifs, setMotifs] = useState<MotifSchema[]>([])
-  const [stratCount, setStratCount] = useState(0)
+  const [labelerCount, setLabelerCount] = useState(0)
+  const [perturbCount, setPerturbCount] = useState(0)
   const [compCount, setCompCount] = useState(0)
 
   useEffect(() => {
     getMotifs().then(setMotifs).catch(() => {})
-    getStrategies().then((s) => setStratCount(s.length)).catch(() => {})
+    getLabelingFunctions().then((s) => setLabelerCount(s.length)).catch(() => {})
+    getPerturbations().then((s) => setPerturbCount(s.length)).catch(() => {})
     getCompositions().then((c) => setCompCount(c.length)).catch(() => {})
   }, [])
 
@@ -74,10 +80,11 @@ export function DashboardPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
           { label: 'Motif types', value: motifs.length || '—' },
-          { label: 'Strategies', value: stratCount || '—' },
+          { label: 'Label functions', value: labelerCount || '—' },
+          { label: 'Perturbations', value: perturbCount || '—' },
           { label: 'Compositions', value: compCount || '—' },
           { label: 'Loaded graph', value: graphId ? 'Yes' : 'None' },
         ].map(({ label, value }) => (

@@ -1,4 +1,4 @@
-"""Request / response models for the graph generation endpoints."""
+"""Request / response models for graph and labeling endpoints."""
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -36,6 +36,16 @@ class GraphGenerateResponse(BaseModel):
     graph_id: str
     elements: List[CytoscapeElement]
     stats: GraphStats
+
+
+class LabelingFunctionConfig(BaseModel):
+    type: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LabelAssignRequest(BaseModel):
+    graph_id: str
+    labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
 
 
 class LabelDistribution(BaseModel):

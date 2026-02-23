@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Info } from 'lucide-react'
 import { GraphCanvas } from './GraphCanvas'
 import { Badge } from '@/components/ui/Badge'
@@ -13,6 +13,24 @@ interface GraphDiffViewProps {
   edgePerturbInfo?: Record<string, EdgePerturbInfo>
 }
 
+function edgeKey(source: string, target: string): string {
+  return source < target ? `${source}|${target}` : `${target}|${source}`
+}
+
+function edgeKeyFromElement(el: CytoscapeElement): string | null {
+  if (el.group !== 'edges') return null
+  const source = String(el.data.source ?? '')
+  const target = String(el.data.target ?? '')
+  if (!source || !target) return null
+  return edgeKey(source, target)
+}
+
+function addClass(existing: string | undefined, extra: string): string {
+  const classes = new Set((existing ?? '').split(' ').filter(Boolean))
+  classes.add(extra)
+  return Array.from(classes).join(' ')
+}
+
 export function GraphDiffView({
   originalElements,
   perturbedElements,
@@ -21,6 +39,7 @@ export function GraphDiffView({
   edgePerturbInfo = {},
 }: GraphDiffViewProps) {
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [sharedPositions, setSharedPositions] = useState<Record<string, { x: number; y: number }> | null>(null)
 
   // Build class maps for both sides
   const originalClasses: Record<string, string> = {}
@@ -37,23 +56,69 @@ export function GraphDiffView({
   const addedEdges = Object.values(edgePerturbInfo).flatMap((i) => i.added_edges)
   const removedEdges = Object.values(edgePerturbInfo).flatMap((i) => i.removed_edges)
 
-  // Inject virtual ghost edges for diff
-  const originalWithGhosts: CytoscapeElement[] = [
-    ...originalElements,
-    ...removedEdges.map((e) => ({
+  // Mark changed edges in place. Only inject ghost edges if we can't match one.
+  const removedEdgeKeys = new Set(removedEdges.map((e) => edgeKey(e.source, e.target)))
+  const addedEdgeKeys = new Set(addedEdges.map((e) => edgeKey(e.source, e.target)))
+
+  const seenRemoved = new Set<string>()
+  const seenAdded = new Set<string>()
+
+  const originalWithDiff: CytoscapeElement[] = originalElements.map((el) => {
+    const key = edgeKeyFromElement(el)
+    if (key && removedEdgeKeys.has(key)) {
+      seenRemoved.add(key)
+      return { ...el, classes: addClass(el.classes, 'removed') }
+    }
+    return el
+  })
+
+  const perturbedWithDiff: CytoscapeElement[] = perturbedElements.map((el) => {
+    const key = edgeKeyFromElement(el)
+    if (key && addedEdgeKeys.has(key)) {
+      seenAdded.add(key)
+      return { ...el, classes: addClass(el.classes, 'added') }
+    }
+    return el
+  })
+
+  const missingRemovedGhosts = removedEdges
+    .filter((e) => !seenRemoved.has(edgeKey(e.source, e.target)))
+    .map((e) => ({
       group: 'edges' as const,
       data: { id: `ghost-rm-${e.source}-${e.target}`, source: e.source, target: e.target },
       classes: 'removed',
-    })),
-  ]
-  const perturbedWithGhosts: CytoscapeElement[] = [
-    ...perturbedElements,
-    ...addedEdges.map((e) => ({
+    }))
+
+  const missingAddedGhosts = addedEdges
+    .filter((e) => !seenAdded.has(edgeKey(e.source, e.target)))
+    .map((e) => ({
       group: 'edges' as const,
       data: { id: `ghost-add-${e.source}-${e.target}`, source: e.source, target: e.target },
       classes: 'added',
-    })),
+    }))
+
+  const originalWithGhosts: CytoscapeElement[] = [
+    ...originalWithDiff,
+    ...missingRemovedGhosts,
   ]
+  const perturbedWithGhosts: CytoscapeElement[] = [
+    ...perturbedWithDiff,
+    ...missingAddedGhosts,
+  ]
+
+  const originalNodeKey = useMemo(
+    () =>
+      originalWithGhosts
+        .filter((el) => el.group === 'nodes')
+        .map((el) => el.data.id)
+        .sort()
+        .join(','),
+    [originalWithGhosts],
+  )
+
+  useEffect(() => {
+    setSharedPositions(null)
+  }, [originalNodeKey])
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -95,6 +160,10 @@ export function GraphDiffView({
               defaultLayout="cose-bilkent"
               toolbar={false}
               className="h-full"
+              fixedPositions={sharedPositions ?? undefined}
+              onPositionsReady={(positions) => {
+                if (!sharedPositions) setSharedPositions(positions)
+              }}
             />
           </div>
         </div>
@@ -106,14 +175,22 @@ export function GraphDiffView({
         <div className="flex flex-col flex-1 min-w-0">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">After</p>
           <div className="flex-1 rounded-xl border border-white/10 overflow-hidden">
-            <GraphCanvas
-              elements={perturbedWithGhosts}
-              extraClasses={perturbedClasses}
-              onNodeClick={(id) => setSelectedNode(id === selectedNode ? null : id)}
-              defaultLayout="cose-bilkent"
-              toolbar={false}
-              className="h-full"
-            />
+            {sharedPositions ? (
+              <GraphCanvas
+                elements={perturbedWithGhosts}
+                extraClasses={perturbedClasses}
+                onNodeClick={(id) => setSelectedNode(id === selectedNode ? null : id)}
+                defaultLayout="cose-bilkent"
+                toolbar={false}
+                className="h-full"
+                fixedPositions={sharedPositions}
+                adjustNewNodes
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-gray-500">
+                Synchronizing layout...
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -10,38 +10,49 @@ import { BASE_STYLESHEET, LAYOUTS, type LayoutName } from '@/lib/cytoscape-utils
 import { getLabelColor } from '@/lib/color-map'
 import type { CytoscapeElement } from '@/api/types'
 
+type NodePosition = { x: number; y: number }
+
 interface GraphCanvasProps {
   elements: CytoscapeElement[]
-  /** Extra per-label Cytoscape stylesheet entries */
   labelStylesheet?: Stylesheet[]
-  /** Called when user clicks a node */
   onNodeClick?: (nodeId: string, data: Record<string, unknown>) => void
   onCyInit?: (cy: Core) => void
   className?: string
-  /** Show the toolbar */
   toolbar?: boolean
-  /** Override layout name */
   defaultLayout?: LayoutName
-  /** Extra element classes to merge onto existing elements */
   extraClasses?: Record<string, string>
+  fixedPositions?: Record<string, NodePosition>
+  adjustNewNodes?: boolean
+  onPositionsReady?: (positions: Record<string, NodePosition>) => void
 }
 
-/** Build dynamic label-colour stylesheet entries from the elements. */
 function buildLabelStyles(elements: CytoscapeElement[]): Stylesheet[] {
   const labels = new Set<string>()
   for (const el of elements) {
     if (el.group === 'nodes') {
-      const lbl = (el.data.label as string) || (el.data.expected_ground_truth as string) || ''
+      const lbl =
+        (el.data.label as string) ||
+        (el.data.observed_ground_truth as string) ||
+        ''
       if (lbl) labels.add(lbl)
     }
   }
   return Array.from(labels).map((label) => {
     const c = getLabelColor(label)
     return {
-      selector: `node[label = "${label}"], node[expected_ground_truth = "${label}"]`,
+      selector: `node[label = "${label}"], node[observed_ground_truth = "${label}"]`,
       style: { 'background-color': c.bg, 'border-color': c.border },
     } as Stylesheet
   })
+}
+
+function collectNodePositions(cy: Core): Record<string, NodePosition> {
+  const positions: Record<string, NodePosition> = {}
+  cy.nodes().forEach((node) => {
+    const pos = node.position()
+    positions[node.id()] = { x: pos.x, y: pos.y }
+  })
+  return positions
 }
 
 const LAYOUT_OPTIONS = Object.keys(LAYOUTS).map((k) => ({ value: k, label: k }))
@@ -55,36 +66,49 @@ export function GraphCanvas({
   toolbar = true,
   defaultLayout = 'cose-bilkent',
   extraClasses,
+  fixedPositions,
+  adjustNewNodes = false,
+  onPositionsReady,
 }: GraphCanvasProps) {
   const cyRef = useRef<Core | null>(null)
   const [layout, setLayout] = useState<LayoutName>(defaultLayout)
 
-  // Stable key that changes when the element set changes, forcing a full re-mount + layout
   const elementsKey = useMemo(() => {
     const nodeIds = elements
       .filter((e) => e.group === 'nodes')
       .map((e) => e.data.id)
       .sort()
       .join(',')
-    return nodeIds
-  }, [elements])
+    const fixedCount = fixedPositions ? Object.keys(fixedPositions).length : 0
+    return `${nodeIds}|${fixedCount}|${adjustNewNodes ? 'adj' : 'static'}`
+  }, [elements, fixedPositions, adjustNewNodes])
 
-  // Merge extra classes into the elements array
-  const mergedElements = extraClasses
-    ? elements.map((el) => {
-        if (el.group === 'nodes') {
-          const extra = extraClasses[el.data.id] ?? ''
-          if (extra) return { ...el, classes: [el.classes ?? '', extra].filter(Boolean).join(' ') }
-        }
-        return el
-      })
-    : elements
+  const mergedElements: CytoscapeElement[] = elements.map((el) => {
+    let next = el
+    if (extraClasses && el.group === 'nodes') {
+      const extra = extraClasses[el.data.id] ?? ''
+      if (extra) {
+        next = { ...next, classes: [next.classes ?? '', extra].filter(Boolean).join(' ') }
+      }
+    }
+    if (fixedPositions && next.group === 'nodes') {
+      const pos = fixedPositions[next.data.id]
+      if (pos) {
+        next = { ...next, position: pos }
+      }
+    }
+    return next
+  })
 
   const stylesheet: Stylesheet[] = [
     ...BASE_STYLESHEET,
     ...buildLabelStyles(elements),
     ...(labelStylesheet ?? []),
   ]
+
+  const effectiveLayout = fixedPositions
+    ? ({ name: 'preset', fit: false, padding: 24, animate: false } as const)
+    : LAYOUTS[layout]
 
   const handleCy = useCallback(
     (cy: Core) => {
@@ -95,8 +119,54 @@ export function GraphCanvas({
         const node = evt.target
         onNodeClick?.(node.id(), node.data() as Record<string, unknown>)
       })
+
+      let published = false
+      const publish = () => {
+        if (published) return
+        published = true
+        onPositionsReady?.(collectNodePositions(cy))
+      }
+
+      if (fixedPositions && adjustNewNodes) {
+        const lockedIds: string[] = []
+        cy.nodes().forEach((node) => {
+          if (fixedPositions[node.id()]) {
+            node.lock()
+            lockedIds.push(node.id())
+          }
+        })
+
+        const hasNewNodes = cy.nodes().toArray().some((node) => !fixedPositions[node.id()])
+        if (hasNewNodes) {
+          const layoutOptions = {
+            ...LAYOUTS[defaultLayout],
+            fit: false,
+            padding: 24,
+            animate: false,
+            randomize: false,
+          }
+          const relayout = cy.layout(layoutOptions as never)
+          relayout.on('layoutstop', () => {
+            lockedIds.forEach((id) => cy.$id(id).unlock())
+            publish()
+          })
+          relayout.run()
+          // Fallback in case the layout event is missed by the wrapper lifecycle.
+          setTimeout(() => {
+            lockedIds.forEach((id) => cy.$id(id).unlock())
+            publish()
+          }, 300)
+        } else {
+          lockedIds.forEach((id) => cy.$id(id).unlock())
+          publish()
+        }
+      } else {
+        cy.one('layoutstop', publish)
+        // Fallback for initial layout race: sometimes layoutstop happens before listener binding.
+        setTimeout(publish, 300)
+      }
     },
-    [onNodeClick, onCyInit],
+    [onCyInit, onNodeClick, onPositionsReady, fixedPositions, adjustNewNodes, defaultLayout],
   )
 
   const applyLayout = (name: LayoutName) => {
@@ -162,7 +232,7 @@ export function GraphCanvas({
             key={elementsKey}
             elements={mergedElements as never}
             stylesheet={stylesheet}
-            layout={LAYOUTS[layout] as never}
+            layout={effectiveLayout as never}
             style={{ width: '100%', height: '100%' }}
             cy={handleCy}
           />

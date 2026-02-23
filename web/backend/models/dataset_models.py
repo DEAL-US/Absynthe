@@ -1,27 +1,22 @@
-"""Request / response models for the dataset endpoints."""
+"""Request / response models for dataset endpoints."""
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from web.backend.models.graph_models import MotifConfig
-from web.backend.models.perturbation_models import EdgePerturbParams
-
-
-class DatasetPerturbParams(BaseModel):
-    num_nodes_to_remove: int = Field(1, ge=1)
-    strategy: str = "random"
-    strategy_params: Dict[str, Any] = Field(default_factory=dict)
-    max_iterations: int = Field(10, ge=1)
-    edge_perturb_params: Optional[EdgePerturbParams] = None
-    edge_perturb_position: str = "after"
+from web.backend.models.graph_models import LabelingFunctionConfig, MotifConfig
+from web.backend.models.perturbation_models import PerturbationConfig
 
 
 class DatasetGenerateRequest(BaseModel):
     num_graphs: int = Field(..., ge=1, le=10000)
     motifs: List[MotifConfig] = Field(..., min_length=1)
+    composition: str = "sequential"
+    composition_params: Dict[str, Any] = Field(default_factory=dict)
     num_extra_vertices: int = Field(0, ge=0)
     num_extra_edges: int = Field(0, ge=0)
-    perturbation_params: Optional[DatasetPerturbParams] = None
+    labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
+    perturbations: List[PerturbationConfig] = Field(default_factory=list)
+    max_perturbation_iterations: int = Field(10, ge=1, le=200)
     output_dir: str = "datasets/output"
 
 
