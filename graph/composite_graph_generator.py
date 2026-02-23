@@ -1,5 +1,5 @@
 import networkx as nx
-from graph_generator import GraphGenerator
+from interfaces import GraphGenerator
 from motifs import motif_generators, motif_param_names
 from typing import List
 from collections import defaultdict
