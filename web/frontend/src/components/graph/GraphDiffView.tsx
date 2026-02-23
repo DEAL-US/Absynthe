@@ -1,0 +1,167 @@
+import { useState } from 'react'
+import { ArrowRight, Info } from 'lucide-react'
+import { GraphCanvas } from './GraphCanvas'
+import { Badge } from '@/components/ui/Badge'
+import { getLabelColor } from '@/lib/color-map'
+import type { CytoscapeElement, ChangedNode, EdgePerturbInfo } from '@/api/types'
+
+interface GraphDiffViewProps {
+  originalElements: CytoscapeElement[]
+  perturbedElements: CytoscapeElement[]
+  removedNodes: string[]
+  changedNodes: ChangedNode[]
+  edgePerturbInfo?: Record<string, EdgePerturbInfo>
+}
+
+export function GraphDiffView({
+  originalElements,
+  perturbedElements,
+  removedNodes,
+  changedNodes,
+  edgePerturbInfo = {},
+}: GraphDiffViewProps) {
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+
+  // Build class maps for both sides
+  const originalClasses: Record<string, string> = {}
+  const perturbedClasses: Record<string, string> = {}
+
+  for (const nid of removedNodes) {
+    originalClasses[nid] = 'removed'
+  }
+  for (const cn of changedNodes) {
+    perturbedClasses[cn.node_id] = 'changed'
+  }
+
+  // Collect all edge changes
+  const addedEdges = Object.values(edgePerturbInfo).flatMap((i) => i.added_edges)
+  const removedEdges = Object.values(edgePerturbInfo).flatMap((i) => i.removed_edges)
+
+  // Inject virtual ghost edges for diff
+  const originalWithGhosts: CytoscapeElement[] = [
+    ...originalElements,
+    ...removedEdges.map((e) => ({
+      group: 'edges' as const,
+      data: { id: `ghost-rm-${e.source}-${e.target}`, source: e.source, target: e.target },
+      classes: 'removed',
+    })),
+  ]
+  const perturbedWithGhosts: CytoscapeElement[] = [
+    ...perturbedElements,
+    ...addedEdges.map((e) => ({
+      group: 'edges' as const,
+      data: { id: `ghost-add-${e.source}-${e.target}`, source: e.source, target: e.target },
+      classes: 'added',
+    })),
+  ]
+
+  return (
+    <div className="flex flex-col gap-4 h-full">
+      {/* Summary badges */}
+      {(changedNodes.length > 0 || removedNodes.length > 0) && (
+        <div className="flex flex-wrap gap-2 items-center">
+          {removedNodes.length > 0 && (
+            <Badge variant="outline" className="text-gray-400">
+              {removedNodes.length} node{removedNodes.length !== 1 ? 's' : ''} removed
+            </Badge>
+          )}
+          {changedNodes.length > 0 && (
+            <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30">
+              {changedNodes.length} label change{changedNodes.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+          {addedEdges.length > 0 && (
+            <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+              +{addedEdges.length} edge{addedEdges.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+          {removedEdges.length > 0 && (
+            <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+              −{removedEdges.length} edge{removedEdges.length !== 1 ? 's' : ''}
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Side-by-side graphs */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex flex-col flex-1 min-w-0">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Before</p>
+          <div className="flex-1 rounded-xl border border-white/10 overflow-hidden">
+            <GraphCanvas
+              elements={originalWithGhosts}
+              extraClasses={originalClasses}
+              onNodeClick={(id) => setSelectedNode(id === selectedNode ? null : id)}
+              defaultLayout="cose-bilkent"
+              toolbar={false}
+              className="h-full"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center shrink-0">
+          <ArrowRight className="w-5 h-5 text-gray-600" />
+        </div>
+
+        <div className="flex flex-col flex-1 min-w-0">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">After</p>
+          <div className="flex-1 rounded-xl border border-white/10 overflow-hidden">
+            <GraphCanvas
+              elements={perturbedWithGhosts}
+              extraClasses={perturbedClasses}
+              onNodeClick={(id) => setSelectedNode(id === selectedNode ? null : id)}
+              defaultLayout="cose-bilkent"
+              toolbar={false}
+              className="h-full"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Changed nodes table */}
+      {changedNodes.length > 0 && (
+        <div className="shrink-0">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            <Info className="inline w-3 h-3 mr-1" />
+            Label changes
+          </p>
+          <div className="rounded-lg border border-white/10 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5">
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Node</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">Before</th>
+                  <th className="text-left px-3 py-2 text-gray-500 font-medium">After</th>
+                </tr>
+              </thead>
+              <tbody>
+                {changedNodes.map((cn) => {
+                  const oldC = getLabelColor(cn.old_label)
+                  const newC = getLabelColor(cn.new_label)
+                  const isSelected = selectedNode === cn.node_id
+                  return (
+                    <tr
+                      key={cn.node_id}
+                      onClick={() => setSelectedNode(cn.node_id === selectedNode ? null : cn.node_id)}
+                      className={`border-b border-white/5 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-orange-500/10' : 'hover:bg-white/5'
+                      }`}
+                    >
+                      <td className="px-3 py-2 font-mono text-gray-300">{cn.node_id}</td>
+                      <td className="px-3 py-2">
+                        <Badge variant="dot" color={oldC.text}>{cn.old_label}</Badge>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge variant="dot" color={newC.text}>{cn.new_label}</Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

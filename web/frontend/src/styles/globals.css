@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-width: 220px;
+  }
+
+  * {
+    @apply border-white/10;
+  }
+
+  body {
+    @apply bg-gray-950 text-gray-100 font-sans;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-white/20 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/30;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+
+  .glass-hover {
+    @apply hover:bg-white/10 transition-colors duration-150;
+  }
+
+  .glow-indigo {
+    box-shadow: 0 0 20px theme('colors.indigo.500 / 30%');
+  }
+}
+
+/* Cytoscape canvas */
+.cy-container {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+}
+
+/* React Cytoscapejs overrides */
+.react-cytoscapejs-container {
+  width: 100% !important;
+  height: 100% !important;
+}

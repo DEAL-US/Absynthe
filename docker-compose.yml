@@ -1,0 +1,11 @@
+services:
+  absynthe-web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist generated datasets outside the container
+      - ./datasets:/app/datasets
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped

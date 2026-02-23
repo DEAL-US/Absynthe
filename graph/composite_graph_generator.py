@@ -49,14 +49,21 @@ class CompositeGraphGenerator(GraphGenerator, LabelEngine, NodeRemover):
             # Get current ID for this motif type
             current_id = motif_counts[base]
 
-            # Generate motif
-            if base == "cycle":
-                len_cycle = params[0] if params else 4  # default to 4 if no param
-                motif_graph = generator.generate_motif(start=current_start, len_cycle=len_cycle, id=current_id)
-            elif base == "house":
-                motif_graph = generator.generate_motif(start=current_start, id=current_id)
-            else:
-                raise ValueError(f"Unsupported motif: {motif_list}")
+            # Generate motif — introspect signature to pass params generically
+            import inspect
+            sig = inspect.signature(generator.generate_motif)
+            extra_param_names = [
+                (name, p)
+                for name, p in sig.parameters.items()
+                if name not in ("self", "start", "id")
+            ]
+            kwargs = {}
+            for i, (name, p) in enumerate(extra_param_names):
+                if i < len(params):
+                    kwargs[name] = params[i]
+                elif p.default is not inspect.Parameter.empty:
+                    kwargs[name] = p.default
+            motif_graph = generator.generate_motif(start=current_start, id=current_id, **kwargs)
 
             # Add to combined graph
             combined_graph.add_nodes_from(motif_graph.nodes(data=True))
