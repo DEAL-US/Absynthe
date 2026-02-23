@@ -1,6 +1,5 @@
 import abc
 import networkx as nx
-from typing import Tuple, List
 
 
 class MotifGenerator(abc.ABC):

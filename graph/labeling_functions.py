@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional
 import networkx as nx
-from labeling_function import LabelingFunction
+from interfaces import LabelingFunction
 from motifs import motif_generators
 from graph.utils import parse_motif_name
 

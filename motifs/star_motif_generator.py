@@ -1,5 +1,5 @@
 import networkx as nx
-from motif_generator import MotifGenerator
+from interfaces import MotifGenerator
 from motifs.utils import assign_labels_to_motif
 
 

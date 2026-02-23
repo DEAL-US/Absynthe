@@ -29,27 +29,36 @@ for node in graph.nodes():
     print(f"Node {node}: {graph.nodes[node]}")
 
 # Apply perturbation (remove 2 nodes) checking for label changes
+# Each result is an independent perturbed variant of the original graph
 perturbations = [(RemoveNodesPerturbation(num_nodes=2, strategy="motif"), 1)]
 pipeline = PerturbationPipeline(
     perturbations=perturbations,
     labeling_functions=[labeling],
     max_iterations=10,
 )
-graph, info = pipeline.apply_and_check(graph)
-print("Perturbation info:", info)
+results = pipeline.apply_and_check(graph)
 
-# Store observed ground truth after perturbation
-labels_after = labeling.compute_labels(graph)
-for node, label in labels_after.items():
-    graph.nodes[node]['observed_ground_truth'] = label
-    graph.nodes[node]['label'] = label
+if results:
+    # Take the first successful perturbation
+    result = results[0]
+    perturbed_graph = result["perturbed_graph"]
+    print("\nPerturbation changes:", result["changes"])
+    print("Changed nodes:", result["changed_nodes"])
 
-print("Nodes:", list(graph.nodes()))
-print("Edges:", list(graph.edges()))
-print("Node attributes:")
-for node in graph.nodes():
-    print(f"Node {node}: {graph.nodes[node]}")
-print("Connected components:", list(nx.connected_components(graph)))
+    # Store observed ground truth after perturbation
+    labels_after = labeling.compute_labels(perturbed_graph)
+    for node, label in labels_after.items():
+        perturbed_graph.nodes[node]['observed_ground_truth'] = label
+        perturbed_graph.nodes[node]['label'] = label
 
-# Visualize the graph
-visualize_graph(graph, title="Generated Graph with Motifs")
+    print("\nNodes:", list(perturbed_graph.nodes()))
+    print("Edges:", list(perturbed_graph.edges()))
+    print("Node attributes:")
+    for node in perturbed_graph.nodes():
+        print(f"Node {node}: {perturbed_graph.nodes[node]}")
+    print("Connected components:", list(nx.connected_components(perturbed_graph)))
+
+    # Visualize the perturbed graph
+    visualize_graph(perturbed_graph, title="Perturbed Graph")
+else:
+    print("No perturbation caused label changes.")

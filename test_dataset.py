@@ -52,6 +52,12 @@ def test_graph_dataset_generator():
     for entry in metadata:
         print(entry)
 
+    # Check we have originals and variants
+    originals = [m for m in metadata if m["is_original"]]
+    variants = [m for m in metadata if not m["is_original"]]
+    print(f"\nOriginal graphs: {len(originals)}")
+    print(f"Perturbed variants: {len(variants)}")
+
 
 if __name__ == "__main__":
     test_graph_dataset_generator()

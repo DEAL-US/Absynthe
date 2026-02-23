@@ -2,9 +2,7 @@ import os
 import json
 from typing import List, Tuple, Dict, Any, Optional
 import networkx as nx
-from graph_generator import GraphGenerator
-from labeling_function import LabelingFunction
-from perturbation import Perturbation
+from interfaces import GraphGenerator, LabelingFunction, Perturbation
 from graph.perturbation_engine import PerturbationPipeline
 
 
@@ -17,8 +15,9 @@ class GraphDatasetGenerator:
     - A list of (Perturbation, count) pairs for perturbing graphs
     - Output configuration
 
-    Changing the components (generator, labeling functions, perturbations)
-    changes the behavior without modifying this class.
+    For each original graph, the pipeline generates multiple perturbed
+    variants (one per successful perturbation application). Each variant
+    is saved as a separate graph in the dataset.
     """
 
     def __init__(
@@ -35,8 +34,9 @@ class GraphDatasetGenerator:
             labeling_functions: List of LabelingFunction implementations.
                 If None, no labeling is performed.
             perturbations: List of (Perturbation, desired_count) pairs.
-                Each perturbation is applied up to desired_count times,
-                only accepting applications that cause label changes.
+                Each perturbation is applied to the ORIGINAL graph up to
+                desired_count times, only accepting applications that
+                cause label changes.
                 If None, no perturbations are applied.
             output_dir: Directory where the dataset will be saved.
             max_perturbation_iterations: Maximum total attempts per
@@ -69,53 +69,74 @@ class GraphDatasetGenerator:
     def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
         """Generate a dataset of graphs.
 
-        For each graph:
+        For each base graph:
         1. Generate the graph using graph_generator
         2. Compute and store expected labels (pre-perturbation)
-        3. Apply perturbations (only accepting those that change labels)
-        4. Compute and store observed labels (post-perturbation)
-        5. Save to disk
+        3. Save the original graph
+        4. Apply perturbations to the ORIGINAL graph, each producing an
+           independent perturbed variant
+        5. For each variant, compute observed labels and save
 
         Args:
-            num_graphs: Number of graphs to generate.
+            num_graphs: Number of base graphs to generate.
             **graph_kwargs: Extra keyword arguments passed to
                 graph_generator.generate_graph().
 
         Returns:
-            Metadata list with one entry per graph.
+            Metadata list with one entry per saved graph (originals + variants).
         """
         metadata = []
+        graph_counter = 0
 
         for i in range(num_graphs):
-            # 1. Generate graph
+            # 1. Generate base graph
             graph = self.graph_generator.generate_graph(**graph_kwargs)
 
-            # 2. Compute and store expected labels (before perturbation)
+            # 2. Compute and store expected labels
             if self.labeling_functions:
                 self._compute_and_store_labels(graph, 'expected_ground_truth')
 
-            # 3. Apply perturbations (if any)
-            perturbation_info = None
+            # 3. Save original graph
+            graph_path = os.path.join(self.graph_dir, f"graph_{graph_counter}.graphml")
+            self.save_graph(graph, graph_path)
+            metadata.append({
+                "graph_id": graph_counter,
+                "base_graph_id": i,
+                "graph_path": graph_path,
+                "is_original": True,
+                "perturbation_info": None,
+            })
+            graph_counter += 1
+
+            # 4. Apply perturbations to the ORIGINAL graph
             if self.perturbations and self.labeling_functions:
                 pipeline = PerturbationPipeline(
                     perturbations=self.perturbations,
                     labeling_functions=self.labeling_functions,
                     max_iterations=self.max_perturbation_iterations,
                 )
-                graph, perturbation_info = pipeline.apply_and_check(graph)
+                results = pipeline.apply_and_check(graph)
 
-                # 4. Compute and store observed labels (after perturbation)
-                self._compute_and_store_labels(graph, 'observed_ground_truth')
+                # 5. Save each perturbed variant
+                for result in results:
+                    perturbed = result["perturbed_graph"]
+                    self._compute_and_store_labels(perturbed, 'observed_ground_truth')
 
-            # 5. Save
-            graph_path = os.path.join(self.graph_dir, f"graph_{i}.graphml")
-            self.save_graph(graph, graph_path)
-
-            metadata.append({
-                "graph_id": i,
-                "graph_path": graph_path,
-                "perturbation_info": perturbation_info,
-            })
+                    variant_path = os.path.join(
+                        self.graph_dir, f"graph_{graph_counter}.graphml"
+                    )
+                    self.save_graph(perturbed, variant_path)
+                    metadata.append({
+                        "graph_id": graph_counter,
+                        "base_graph_id": i,
+                        "graph_path": variant_path,
+                        "is_original": False,
+                        "perturbation_info": {
+                            "changes": result["changes"],
+                            "changed_nodes": result["changed_nodes"],
+                        },
+                    })
+                    graph_counter += 1
 
         metadata_path = os.path.join(self.output_dir, "metadata.json")
         self.save_metadata(metadata, metadata_path)
