@@ -13,3 +13,13 @@ motif_generators = {
     "star": StarMotifGenerator,
     "gate": GateMotifGenerator,
 }
+
+# Maps motif base names to the keyword argument names expected by
+# each generator's generate_motif() method (positional order).
+motif_param_names = {
+    "cycle": ["len_cycle"],
+    "house": [],
+    "chain": ["length"],
+    "star": ["num_leaves"],
+    "gate": ["arm_length"],
+}

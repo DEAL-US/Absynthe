@@ -4,10 +4,11 @@ from typing import List
 
 
 class GraphGenerator(abc.ABC):
-    """Abstract base class for generating graphs composed of motifs.
+    """Abstract base class for generating graphs.
 
-    A graph generator takes a list of motif descriptions and generates
-    a complete graph by combining them.
+    A graph generator produces a NetworkX graph. Concrete implementations
+    may generate graphs from motifs, read them from files, use random
+    graph models, or any other method.
     """
 
     @abc.abstractmethod

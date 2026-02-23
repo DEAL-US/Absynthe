@@ -1,9 +1,10 @@
 import random
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 import networkx as nx
-from statistics import mean
 from .perturbation_strategies import STRATEGY_MAP
-from .label_engine import LabelEngine
+from perturbation import Perturbation
+from labeling_function import LabelingFunction
+
 
 def remove_nodes(graph: nx.Graph,
                  n: int,
@@ -89,88 +90,111 @@ def perturb_edges(graph: nx.Graph,
     return G
 
 
-class GraphPerturbation:
-    def __init__(self, graph: nx.Graph, num_nodes_to_remove: int, strategy: str, max_iterations: int,
-                 edge_perturb_params: Optional[dict] = None, edge_perturb_position: str = "after"):
-        """
-        Initialize the GraphPerturbation class.
+class PerturbationPipeline:
+    """Applies perturbations to a graph, accepting only those that cause label changes.
 
-        :param graph: The input graph to perturb.
-        :param num_nodes_to_remove: Number of nodes to remove in each perturbation.
-        :param strategy: Strategy for selecting nodes to remove.
-        :param max_iterations: Maximum number of iterations to find a valid perturbation.
-        :param edge_perturb_params: Dict with any of 'p_remove', 'p_add', 'add_num' for edge perturbation.
-        :param edge_perturb_position: 'before', 'after' or None. When to apply edge perturbation relative to node removal.
+    Receives a list of (Perturbation, desired_count) pairs and a list of
+    LabelingFunction instances. For each pair, the perturbation is applied
+    repeatedly; each application is checked against the labeling functions
+    and only accepted if it causes at least one label change. The process
+    continues until the desired count of successful (label-changing)
+    applications is reached, or max_iterations total attempts are exhausted.
+    """
+
+    def __init__(
+        self,
+        perturbations: List[Tuple[Perturbation, int]],
+        labeling_functions: List[LabelingFunction],
+        max_iterations: int = 10,
+    ):
         """
-        self.graph = graph
-        self.num_nodes_to_remove = num_nodes_to_remove
-        self.strategy = strategy
+        Args:
+            perturbations: List of (perturbation_instance, desired_count) pairs.
+                For each pair, the pipeline will try to apply the perturbation
+                desired_count times successfully (i.e., causing label changes).
+            labeling_functions: List of labeling functions. Labels from
+                later functions overwrite labels from earlier ones for
+                the same node.
+            max_iterations: Maximum total attempts per perturbation to find
+                applications that cause label changes.
+        """
+        self.perturbations = perturbations
+        self.labeling_functions = labeling_functions
         self.max_iterations = max_iterations
-        self.edge_perturb_params = edge_perturb_params or {}
-        self.edge_perturb_position = edge_perturb_position
 
-    def perturb_and_check(self):
+    def _compute_labels(self, graph: nx.Graph) -> Dict[int, Any]:
+        """Compute labels using all labeling functions.
+
+        Later labeling functions overwrite earlier ones for the same node.
         """
-        Perform perturbations on the graph and check if any node's class changes.
+        labels = {}
+        for lf in self.labeling_functions:
+            labels.update(lf.compute_labels(graph))
+        return labels
 
-        :return: Tuple containing the perturbed graph and a dictionary with details of the perturbation.
+    def apply_and_check(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+        """Apply perturbations one at a time, only accepting those that change labels.
+
+        For each (perturbation, desired_count) pair:
+          - Apply the perturbation to the current graph
+          - Check if labels changed compared to before this application
+          - If labels changed: accept (keep the perturbed graph), count it
+          - If labels didn't change: discard, try again
+          - Stop when desired_count successful applications are reached
+            or max_iterations total attempts are exhausted for this perturbation
+
+        Args:
+            graph: The original graph.
+
+        Returns:
+            Tuple of (final_graph, info_dict) where info_dict contains:
+            - 'perturbation_results': list of per-perturbation results, each with
+              'successful_applications', 'total_attempts', and details of each
+              accepted application (changes_dict and changed_nodes).
         """
-        label_engine = LabelEngine()
-        original_labels = label_engine.assign_labels(self.graph)
+        current_graph = graph.copy()
+        all_results = []
 
-        for iteration in range(self.max_iterations):
-            g = self.graph.copy()
-            removed_nodes = []
-            edge_perturb_info = {}
-
-            # Edge perturbation BEFORE node removal
-            if self.edge_perturb_position == "before" and self.edge_perturb_params:
-                g_before = g.copy()
-                g = perturb_edges(
-                    g,
-                    p_remove=self.edge_perturb_params.get("p_remove", 0.0),
-                    p_add=self.edge_perturb_params.get("p_add", 0.0),
-                    add_num=self.edge_perturb_params.get("add_num", None),
-                )
-                edge_perturb_info["before"] = self._get_edge_diff(g_before, g)
-
-            # Node removal
-            g, removed_nodes = remove_nodes(
-                g, self.num_nodes_to_remove, self.strategy
-            )
-
-            # Edge perturbation AFTER node removal
-            if self.edge_perturb_position == "after" and self.edge_perturb_params:
-                g_before = g.copy()
-                g = perturb_edges(
-                    g,
-                    p_remove=self.edge_perturb_params.get("p_remove", 0.0),
-                    p_add=self.edge_perturb_params.get("p_add", 0.0),
-                    add_num=self.edge_perturb_params.get("add_num", None),
-                )
-                edge_perturb_info["after"] = self._get_edge_diff(g_before, g)
-
-            perturbed_labels = label_engine.assign_labels(g)
-
-            changed_nodes = {
-                node: (original_labels[node], perturbed_labels[node])
-                for node in perturbed_labels
-                if perturbed_labels[node] != original_labels.get(node)
+        for perturbation, desired_count in self.perturbations:
+            pert_result = {
+                "successful_applications": 0,
+                "total_attempts": 0,
+                "accepted": [],
             }
 
-            if changed_nodes:
-                return g, {
-                    "removed_nodes": removed_nodes,
-                    "changed_nodes": changed_nodes,
-                    "edge_perturb_info": edge_perturb_info,
+            successes = 0
+            attempts = 0
+
+            while successes < desired_count and attempts < self.max_iterations:
+                attempts += 1
+
+                # Labels before this application
+                labels_before = self._compute_labels(current_graph)
+
+                # Apply perturbation
+                candidate_graph, changes = perturbation.apply(current_graph)
+
+                # Labels after this application
+                labels_after = self._compute_labels(candidate_graph)
+
+                # Check for label changes
+                changed_nodes = {
+                    node: (labels_before.get(node), labels_after[node])
+                    for node in labels_after
+                    if labels_after[node] != labels_before.get(node)
                 }
 
-        return g, {"message": "No valid perturbation found after maximum iterations."}
+                if changed_nodes:
+                    # Accept: keep the perturbed graph
+                    current_graph = candidate_graph
+                    successes += 1
+                    pert_result["accepted"].append({
+                        "changes": changes,
+                        "changed_nodes": changed_nodes,
+                    })
 
-    @staticmethod
-    def _get_edge_diff(g_before, g_after):
-        before_edges = set(g_before.edges())
-        after_edges = set(g_after.edges())
-        removed = list(before_edges - after_edges)
-        added = list(after_edges - before_edges)
-        return {"removed_edges": removed, "added_edges": added}
+            pert_result["successful_applications"] = successes
+            pert_result["total_attempts"] = attempts
+            all_results.append(pert_result)
+
+        return current_graph, {"perturbation_results": all_results}

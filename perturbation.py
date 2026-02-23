@@ -1,0 +1,33 @@
+import abc
+from typing import Tuple, Dict, Any
+import networkx as nx
+
+
+class Perturbation(abc.ABC):
+    """Abstract base class for graph perturbations.
+
+    A perturbation is any operation that modifies a graph in a controlled way.
+    Examples include removing nodes, adding edges, removing edges, modifying
+    node features, etc.
+
+    Each concrete perturbation configures its own parameters (strategy, count,
+    probability, etc.) in __init__. The apply method is stateless with respect
+    to the graph argument.
+    """
+
+    @abc.abstractmethod
+    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+        """Apply this perturbation to a graph.
+
+        The implementation must NOT mutate the input graph. It should work
+        on a copy.
+
+        Args:
+            graph: The input graph to perturb.
+
+        Returns:
+            A tuple of (perturbed_graph, changes_dict) where changes_dict
+            describes what changed (e.g., removed_nodes, added_edges, etc.).
+            The exact keys depend on the perturbation type.
+        """
+        pass
