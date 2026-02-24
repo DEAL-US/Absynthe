@@ -40,8 +40,8 @@ class CycleMotifGenerator(MotifGenerator):
     @staticmethod
     def assign_labels(graph, len_cycle=3):
         """
-        Identifica ciclos en el grafo y asigna etiquetas a sus nodos.
-        len_cycle: longitud del ciclo a buscar y etiquetar (por defecto 3)
+        Search for subgraphs shaped like a “cycle” and label their nodes.
+        len_cycle: Length of the cycle to search for and label (default: 3).
         """
         motif = CycleMotifGenerator().generate_motif(0, len_cycle)
         assign_labels_to_motif(graph, motif, f'cycle_{len_cycle}')

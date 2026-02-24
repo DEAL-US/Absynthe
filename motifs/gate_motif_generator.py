@@ -74,7 +74,7 @@ class GateMotifGenerator(MotifGenerator):
     @staticmethod
     def assign_labels(graph):
         """
-        Identifica motivos tipo gate en el grafo y asigna etiquetas a sus nodos.
+        Search for subgraphs shaped like a “gate” and label their nodes.
         """
         motif = GateMotifGenerator().generate_motif(0, 1)  # ejemplo: gate con brazo de longitud 1
         assign_labels_to_motif(graph, motif, 'gate')

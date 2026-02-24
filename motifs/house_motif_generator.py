@@ -39,7 +39,7 @@ class HouseMotifGenerator(MotifGenerator):
     @staticmethod
     def assign_labels(graph):
         """
-        Busca subgrafos con forma de 'house' y etiqueta sus nodos.
+        Search for subgraphs shaped like a “house” and label their nodes.
         """
         motif = HouseMotifGenerator().generate_motif(0)
         assign_labels_to_motif(graph, motif, 'house')
