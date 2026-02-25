@@ -1,6 +1,9 @@
 from typing import List, Tuple, Dict, Any
+
 import networkx as nx
+
 from interfaces import Perturbation, LabelingFunction
+from interfaces.labeling_result import LabelingResult
 
 
 class PerturbationPipeline:
@@ -39,15 +42,21 @@ class PerturbationPipeline:
         self.labeling_functions = labeling_functions
         self.max_iterations = max_iterations
 
-    def _compute_labels(self, graph: nx.Graph) -> Dict[int, Any]:
+    def _compute_labels(self, graph: nx.Graph) -> LabelingResult:
         """Compute labels using all labeling functions.
 
         Later labeling functions overwrite earlier ones for the same node.
+        Graph labels and metadata are merged across all functions.
         """
-        labels = {}
+        merged = LabelingResult(labels={})
         for lf in self.labeling_functions:
-            labels.update(lf.compute_labels(graph))
-        return labels
+            result = lf.compute_labels(graph)
+            merged.labels.update(result.labels)
+            merged.graph_labels.update(result.graph_labels)
+            for node, det in result.details.items():
+                merged.details.setdefault(node, {}).update(det)
+            merged.metadata.update(result.metadata)
+        return merged
 
     def apply_and_check(self, graph: nx.Graph) -> List[Dict[str, Any]]:
         """Apply perturbations to the original graph, only accepting those that change labels.
@@ -69,8 +78,11 @@ class PerturbationPipeline:
             - 'perturbed_graph': the independently perturbed graph
             - 'changes': what the perturbation changed (from Perturbation.apply)
             - 'changed_nodes': {node: (old_label, new_label)} for nodes whose label changed
+            - 'labeling_result': full LabelingResult for the perturbed graph
+            - 'original_labeling_result': full LabelingResult for the original graph
         """
-        original_labels = self._compute_labels(graph)
+        original_result = self._compute_labels(graph)
+        original_labels = original_result.labels
         results = []
 
         for perturbation, desired_count in self.perturbations:
@@ -84,7 +96,8 @@ class PerturbationPipeline:
                 candidate_graph, changes = perturbation.apply(graph)
 
                 # Check for label changes
-                candidate_labels = self._compute_labels(candidate_graph)
+                candidate_result = self._compute_labels(candidate_graph)
+                candidate_labels = candidate_result.labels
                 changed_nodes = {
                     node: (original_labels.get(node), candidate_labels[node])
                     for node in candidate_labels
@@ -97,6 +110,8 @@ class PerturbationPipeline:
                         "perturbed_graph": candidate_graph,
                         "changes": changes,
                         "changed_nodes": changed_nodes,
+                        "labeling_result": candidate_result,
+                        "original_labeling_result": original_result,
                     })
 
         return results

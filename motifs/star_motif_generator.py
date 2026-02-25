@@ -47,4 +47,4 @@ class StarMotifGenerator(MotifGenerator):
         Search for subgraphs shaped like a “star” and label their nodes.
         """
         motif = StarMotifGenerator().generate_motif(0, 3)  # ejemplo: estrella con 3 hojas
-        assign_labels_to_motif(graph, motif, 'star')
+        return assign_labels_to_motif(graph, motif, 'star')

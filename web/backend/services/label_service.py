@@ -17,11 +17,13 @@ def _apply_labels(
 ) -> None:
     labelers = build_labeling_functions(labeling_configs)
     for labeler in labelers:
-        labels = labeler.compute_labels(graph)
-        for node, label in labels.items():
+        result = labeler.compute_labels(graph)
+        for node, label in result.labels.items():
             if node in graph:
                 graph.nodes[node][attribute_name] = label
                 graph.nodes[node]["label"] = label
+        for key, value in result.graph_labels.items():
+            graph.graph[key] = value
 
 
 def assign(

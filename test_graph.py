@@ -20,8 +20,8 @@ motif_order = ["house", "cycle_4", "cycle_3"]
 labeling = MotifLabelingFunction(motif_order=motif_order)
 
 # Assign expected ground truth before perturbation
-labels = labeling.compute_labels(graph)
-for node, label in labels.items():
+result = labeling.compute_labels(graph)
+for node, label in result.labels.items():
     graph.nodes[node]['expected_ground_truth'] = label
     graph.nodes[node]['label'] = label
 
@@ -46,8 +46,8 @@ if results:
     print("Changed nodes:", result["changed_nodes"])
 
     # Store observed ground truth after perturbation
-    labels_after = labeling.compute_labels(perturbed_graph)
-    for node, label in labels_after.items():
+    result_after = labeling.compute_labels(perturbed_graph)
+    for node, label in result_after.labels.items():
         perturbed_graph.nodes[node]['observed_ground_truth'] = label
         perturbed_graph.nodes[node]['label'] = label
 

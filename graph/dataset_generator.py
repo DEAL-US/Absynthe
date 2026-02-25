@@ -1,8 +1,11 @@
 import os
 import json
 from typing import List, Tuple, Dict, Any, Optional
+
 import networkx as nx
+
 from interfaces import GraphGenerator, LabelingFunction, Perturbation
+from interfaces.labeling_result import LabelingResult
 from graph.perturbation_engine import PerturbationPipeline
 
 
@@ -52,19 +55,32 @@ class GraphDatasetGenerator:
         self.graph_dir = os.path.join(self.output_dir, "graphs")
         os.makedirs(self.graph_dir, exist_ok=True)
 
-    def _compute_and_store_labels(self, graph: nx.Graph, attribute_name: str) -> None:
-        """Compute labels using all labeling functions and store them as node attributes.
+    def _compute_and_store_labels(self, graph: nx.Graph, attribute_name: str) -> LabelingResult:
+        """Compute labels using all labeling functions and store them as node/graph attributes.
 
         Args:
             graph: The graph to label (modified in place).
             attribute_name: Node attribute name to store labels under
                             (e.g., 'expected_ground_truth', 'observed_ground_truth').
+
+        Returns:
+            The merged ``LabelingResult`` from all labeling functions.
         """
+        merged = LabelingResult(labels={})
         for lf in self.labeling_functions:
-            labels = lf.compute_labels(graph)
-            for node, label in labels.items():
+            result = lf.compute_labels(graph)
+            for node, label in result.labels.items():
                 graph.nodes[node][attribute_name] = label
                 graph.nodes[node]['label'] = label
+            merged.labels.update(result.labels)
+            merged.graph_labels.update(result.graph_labels)
+            for node, det in result.details.items():
+                merged.details.setdefault(node, {}).update(det)
+            merged.metadata.update(result.metadata)
+        # Store graph-level labels as graph attributes
+        for key, value in merged.graph_labels.items():
+            graph.graph[key] = value
+        return merged
 
     def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
         """Generate a dataset of graphs.
@@ -93,19 +109,34 @@ class GraphDatasetGenerator:
             graph = self.graph_generator.generate_graph(**graph_kwargs)
 
             # 2. Compute and store expected labels
+            labeling_result = None
             if self.labeling_functions:
-                self._compute_and_store_labels(graph, 'expected_ground_truth')
+                labeling_result = self._compute_and_store_labels(graph, 'expected_ground_truth')
 
             # 3. Save original graph
             graph_path = os.path.join(self.graph_dir, f"graph_{graph_counter}.graphml")
             self.save_graph(graph, graph_path)
-            metadata.append({
+            entry: Dict[str, Any] = {
                 "graph_id": graph_counter,
                 "base_graph_id": i,
                 "graph_path": graph_path,
                 "is_original": True,
                 "perturbation_info": None,
-            })
+            }
+            if labeling_result:
+                if labeling_result.graph_labels:
+                    entry["graph_labels"] = labeling_result.graph_labels
+                instances = labeling_result.metadata.get("instances")
+                if instances:
+                    entry["motif_instances"] = [
+                        {
+                            "motif_name": inst["motif_name"],
+                            "nodes": sorted(inst["nodes"]),
+                            "edges": sorted([list(e) for e in inst["edges"]]),
+                        }
+                        for inst in instances
+                    ]
+            metadata.append(entry)
             graph_counter += 1
 
             # 4. Apply perturbations to the ORIGINAL graph

@@ -1,6 +1,9 @@
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 import networkx as nx
+
 from interfaces import LabelingFunction
+from interfaces.labeling_result import LabelingResult
 from motifs import motif_generators
 from graph.utils import parse_motif_name
 
@@ -23,7 +26,7 @@ class MotifLabelingFunction(LabelingFunction):
         """
         self.motif_order = motif_order
 
-    def compute_labels(self, graph: nx.Graph) -> Dict[int, Any]:
+    def compute_labels(self, graph: nx.Graph) -> LabelingResult:
         """Compute motif-based labels for all nodes in the graph.
 
         Iterates through motif types in reverse order so that earlier motifs
@@ -41,14 +44,29 @@ class MotifLabelingFunction(LabelingFunction):
         for node in work_graph.nodes():
             work_graph.nodes[node].pop('label', None)
 
-        node_labels = {}
+        node_labels: Dict[int, Any] = {}
+        all_instances: List[Dict[str, Any]] = []
+        details: Dict[int, Dict[str, Any]] = {}
 
         for motif_name in order:
             base_name, args = parse_motif_name(motif_name)
             generator_class = motif_generators.get(base_name)
             if generator_class and hasattr(generator_class, 'assign_labels'):
-                generator_class.assign_labels(work_graph, *args)
+                instances = generator_class.assign_labels(work_graph, *args)
+                if instances:
+                    all_instances.extend(instances)
+                    for inst in instances:
+                        for node in inst["nodes"]:
+                            details[node] = {
+                                "motif_nodes": inst["nodes"],
+                                "motif_edges": inst["edges"],
+                            }
                 for node in work_graph.nodes():
                     node_labels[node] = work_graph.nodes[node].get('label', 'unknown')
 
-        return node_labels
+        return LabelingResult(
+            labels=node_labels,
+            graph_labels={},
+            details=details,
+            metadata={"instances": all_instances} if all_instances else {},
+        )

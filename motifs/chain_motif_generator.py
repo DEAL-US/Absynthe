@@ -44,4 +44,4 @@ class ChainMotifGenerator(MotifGenerator):
         Search for subgraphs shaped like a “chain” and label their nodes.
         """
         motif = ChainMotifGenerator().generate_motif(0, 3)  # ejemplo: path de 3 nodos
-        assign_labels_to_motif(graph, motif, 'chain')
+        return assign_labels_to_motif(graph, motif, 'chain')
