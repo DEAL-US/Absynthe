@@ -68,7 +68,7 @@ export function DashboardPage() {
     <PageContainer className="overflow-y-auto">
       {/* Hero */}
       <div className="rounded-2xl border border-brand-500/20 bg-gradient-to-br from-brand-900/40 to-violet-900/20 p-8">
-        <h2 className="text-2xl font-bold text-gray-100 mb-2">Absynthe</h2>
+        <h2 className="text-2xl font-bold text-gray-100 mb-2">Graphtender</h2>
         <p className="text-gray-400 max-w-xl leading-relaxed">
           A framework for generating benchmarks that test GNN explainability techniques.
           Build graphs, assign motif-based ground-truth labels, apply perturbations, and

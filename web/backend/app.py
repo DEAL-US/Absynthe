@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from web.backend.config import DEV_ORIGINS
 from web.backend.routers import capabilities, dataset, graph, labels, perturbation
+from web.backend.services import upload_service
 
 app = FastAPI(
     title="Absynthe Web API",
@@ -36,6 +37,11 @@ app.include_router(dataset.router, prefix="/api/dataset", tags=["dataset"])
 @app.get("/api/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.on_event("shutdown")
+async def _cleanup_temp_dirs() -> None:
+    upload_service.cleanup_all()
 
 
 # ── Serve built frontend in production ──────────────────────────────────────

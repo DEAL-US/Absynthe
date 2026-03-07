@@ -56,3 +56,12 @@ class LabeledGraphResponse(BaseModel):
     graph_id: str
     elements: List[CytoscapeElement]
     label_distribution: LabelDistribution
+
+
+class GraphUploadResponse(BaseModel):
+    graph_id: str
+    elements: List[CytoscapeElement]
+    stats: GraphStats
+    file_count: int
+    folder_path: Optional[str] = None
+    warnings: List[Dict[str, str]] = Field(default_factory=list)

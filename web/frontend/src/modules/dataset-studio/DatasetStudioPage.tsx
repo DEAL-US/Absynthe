@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Database, Download, Play, Plus, Trash2 } from 'lucide-react'
+import { Database, Download, FolderUp, Play, Plus, Trash2 } from 'lucide-react'
 import { generateDataset } from '@/api/dataset'
 import {
   getCompositions,
@@ -44,7 +44,15 @@ function parseParamValue(param: ParamSchema, raw: string): string | number {
 }
 
 export function DatasetStudioPage() {
-  const { labelingFunctions: savedLabeling, perturbations: savedPerturbations } = useGraphState()
+  const {
+    labelingFunctions: savedLabeling,
+    perturbations: savedPerturbations,
+    graphSource,
+    uploadFolderPath,
+    uploadFileCount,
+  } = useGraphState()
+
+  const isUploadMode = graphSource === 'upload' && !!uploadFolderPath
 
   const [motifSchemas, setMotifSchemas] = useState<MotifSchema[]>([])
   const [compositionSchemas, setCompositionSchemas] = useState<CompositionSchema[]>([])
@@ -61,6 +69,8 @@ export function DatasetStudioPage() {
   const [perturbations, setPerturbations] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxPerturbIter, setMaxPerturbIter] = useState(10)
   const [outputDir, setOutputDir] = useState('datasets/output')
+  const [iterationOrder, setIterationOrder] = useState('sequential')
+  const [exhaustionPolicy, setExhaustionPolicy] = useState('stop')
 
   const [taskId, setTaskId] = useState<string | null>(null)
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null)
@@ -168,18 +178,33 @@ export function DatasetStudioPage() {
     setLoading(true)
     setError(null)
     try {
-      const { task_id } = await generateDataset({
-        num_graphs: numGraphs,
-        motifs,
-        composition,
-        composition_params: compositionParams,
-        num_extra_vertices: extraV,
-        num_extra_edges: extraE,
-        labeling_functions: labelingFunctions,
-        perturbations,
-        max_perturbation_iterations: maxPerturbIter,
-        output_dir: outputDir,
-      })
+      const { task_id } = await generateDataset(
+        isUploadMode
+          ? {
+              num_graphs: numGraphs,
+              folder_source: {
+                folder_path: uploadFolderPath!,
+                iteration_order: iterationOrder,
+                exhaustion_policy: exhaustionPolicy,
+              },
+              labeling_functions: labelingFunctions,
+              perturbations,
+              max_perturbation_iterations: maxPerturbIter,
+              output_dir: outputDir,
+            }
+          : {
+              num_graphs: numGraphs,
+              motifs,
+              composition,
+              composition_params: compositionParams,
+              num_extra_vertices: extraV,
+              num_extra_edges: extraE,
+              labeling_functions: labelingFunctions,
+              perturbations,
+              max_perturbation_iterations: maxPerturbIter,
+              output_dir: outputDir,
+            },
+      )
       setTaskId(task_id)
       setTaskStatus({ task_id, status: 'pending', current: 0, total: numGraphs })
     } catch (e) {
@@ -196,55 +221,88 @@ export function DatasetStudioPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Dataset Config</p>
         <Slider label="Number of graphs" value={numGraphs} min={1} max={1000} step={1} onValueChange={setNumGraphs} />
 
-        <div className="border-t border-white/10 pt-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Motifs</p>
-          <div className="flex flex-col gap-1.5 mb-2">
-            {motifs.map((motif, idx) => (
-              <div key={`${motif.type}-${idx}`} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
-                <Badge color="#6366f1">{motif.type}</Badge>
-                {motif.params.length > 0 && (
-                  <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
-                )}
-                <button onClick={() => removeMotif(idx)} className="ml-auto text-gray-600 hover:text-red-400 transition-colors text-xs">×</button>
+        {isUploadMode ? (
+          <div className="border-t border-white/10 pt-3 flex flex-col gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Graph Source</p>
+            <div className="flex items-center gap-2 rounded-lg bg-brand-900/20 border border-brand-500/20 px-3 py-2.5">
+              <FolderUp className="w-4 h-4 text-brand-400 shrink-0" />
+              <div>
+                <p className="text-xs text-brand-300 font-medium">Using {uploadFileCount} uploaded graphs</p>
               </div>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {motifSchemas.map((schema) => (
-              <Button key={schema.type} variant="outline" size="sm" onClick={() => addMotif(schema.type)}>
-                + {schema.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
-          <Select
-            label="Composition"
-            value={composition}
-            onValueChange={(value) => {
-              setComposition(value)
-              setCompositionParams({})
-            }}
-            options={compositionSchemas.map((schema) => ({ value: schema.id, label: schema.label }))}
-          />
-          {compositionSchema?.params.map((param) => (
-            <Input
-              key={param.name}
-              label={param.label}
-              type={param.type === 'string' ? 'text' : 'number'}
-              value={String(compositionParams[param.name] ?? param.default)}
-              onChange={(e) =>
-                setCompositionParams((prev) => ({
-                  ...prev,
-                  [param.name]: parseParamValue(param, e.target.value),
-                }))
-              }
+            </div>
+            <Select
+              label="Iteration Order"
+              value={iterationOrder}
+              onValueChange={setIterationOrder}
+              options={[
+                { value: 'sequential', label: 'Sequential' },
+                { value: 'random', label: 'Random' },
+              ]}
             />
-          ))}
-          <Slider label="Extra vertices" value={extraV} min={0} max={20} onValueChange={setExtraV} />
-          <Slider label="Extra edges" value={extraE} min={0} max={20} onValueChange={setExtraE} />
-        </div>
+            <Select
+              label="Exhaustion Policy"
+              value={exhaustionPolicy}
+              onValueChange={setExhaustionPolicy}
+              options={[
+                { value: 'stop', label: 'Stop' },
+                { value: 'cycle', label: 'Cycle' },
+                { value: 'raise', label: 'Raise' },
+              ]}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="border-t border-white/10 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Motifs</p>
+              <div className="flex flex-col gap-1.5 mb-2">
+                {motifs.map((motif, idx) => (
+                  <div key={`${motif.type}-${idx}`} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
+                    <Badge color="#6366f1">{motif.type}</Badge>
+                    {motif.params.length > 0 && (
+                      <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
+                    )}
+                    <button onClick={() => removeMotif(idx)} className="ml-auto text-gray-600 hover:text-red-400 transition-colors text-xs">×</button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {motifSchemas.map((schema) => (
+                  <Button key={schema.type} variant="outline" size="sm" onClick={() => addMotif(schema.type)}>
+                    + {schema.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
+              <Select
+                label="Composition"
+                value={composition}
+                onValueChange={(value) => {
+                  setComposition(value)
+                  setCompositionParams({})
+                }}
+                options={compositionSchemas.map((schema) => ({ value: schema.id, label: schema.label }))}
+              />
+              {compositionSchema?.params.map((param) => (
+                <Input
+                  key={param.name}
+                  label={param.label}
+                  type={param.type === 'string' ? 'text' : 'number'}
+                  value={String(compositionParams[param.name] ?? param.default)}
+                  onChange={(e) =>
+                    setCompositionParams((prev) => ({
+                      ...prev,
+                      [param.name]: parseParamValue(param, e.target.value),
+                    }))
+                  }
+                />
+              ))}
+              <Slider label="Extra vertices" value={extraV} min={0} max={20} onValueChange={setExtraV} />
+              <Slider label="Extra edges" value={extraE} min={0} max={20} onValueChange={setExtraE} />
+            </div>
+          </>
+        )}
 
         <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Labeling functions</p>
@@ -348,7 +406,7 @@ export function DatasetStudioPage() {
 
         <Input label="Output directory" value={outputDir} onChange={(e) => setOutputDir(e.target.value)} />
         {error && <p className="text-xs text-red-400 bg-red-900/20 rounded-lg p-2">{error}</p>}
-        <Button onClick={handleStart} loading={loading} disabled={isRunning || motifs.length === 0} className="w-full">
+        <Button onClick={handleStart} loading={loading} disabled={isRunning || (!isUploadMode && motifs.length === 0)} className="w-full">
           <Play className="w-4 h-4" />
           Generate Dataset
         </Button>

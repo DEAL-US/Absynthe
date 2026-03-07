@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'Dashboard', subtitle: 'Overview of your Absynthe workspace' },
+  '/': { title: 'Dashboard', subtitle: 'Overview of your Graphtender workspace' },
   '/graph': { title: 'Graph Builder', subtitle: 'Generate composite graphs from motifs' },
   '/labels': { title: 'Label Inspector', subtitle: 'Assign and visualise ground-truth labels' },
   '/perturbation': { title: 'Perturbation Lab', subtitle: 'Apply structural perturbations and observe label changes' },
@@ -17,7 +17,7 @@ interface HeaderProps {
 
 export function Header({ theme, onToggleTheme }: HeaderProps) {
   const { pathname } = useLocation()
-  const info = PAGE_TITLES[pathname] ?? { title: 'Absynthe', subtitle: '' }
+  const info = PAGE_TITLES[pathname] ?? { title: 'Graphtender', subtitle: '' }
 
   return (
     <header className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-gray-900/40 backdrop-blur-sm shrink-0">

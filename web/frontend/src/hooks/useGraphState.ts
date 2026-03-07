@@ -14,7 +14,11 @@ interface GraphState {
   labelingFunctions: LabelingFunctionConfig[]
   perturbations: PerturbationConfig[]
   perturbationResult: PerturbationResponse | null
+  graphSource: 'motif' | 'upload'
+  uploadFolderPath: string | null
+  uploadFileCount: number
   setGraph: (id: string, elements: CytoscapeElement[]) => void
+  setUploadedGraph: (id: string, elements: CytoscapeElement[], folderPath: string | null, fileCount: number) => void
   setLabelingFunctions: (configs: LabelingFunctionConfig[]) => void
   setPerturbations: (configs: PerturbationConfig[]) => void
   setLabels: (
@@ -49,9 +53,31 @@ export const useGraphState = create<GraphState>((set) => ({
   labelingFunctions: DEFAULT_LABELING_FUNCTIONS,
   perturbations: DEFAULT_PERTURBATIONS,
   perturbationResult: null,
+  graphSource: 'motif',
+  uploadFolderPath: null,
+  uploadFileCount: 0,
 
   setGraph: (id, elements) =>
-    set({ graphId: id, elements, labelDistribution: null, perturbationResult: null }),
+    set({
+      graphId: id,
+      elements,
+      labelDistribution: null,
+      perturbationResult: null,
+      graphSource: 'motif',
+      uploadFolderPath: null,
+      uploadFileCount: 0,
+    }),
+
+  setUploadedGraph: (id, elements, folderPath, fileCount) =>
+    set({
+      graphId: id,
+      elements,
+      labelDistribution: null,
+      perturbationResult: null,
+      graphSource: 'upload',
+      uploadFolderPath: folderPath,
+      uploadFileCount: fileCount,
+    }),
 
   setLabelingFunctions: (configs) =>
     set({ labelingFunctions: configs }),
@@ -83,5 +109,8 @@ export const useGraphState = create<GraphState>((set) => ({
       labelingFunctions: DEFAULT_LABELING_FUNCTIONS,
       perturbations: DEFAULT_PERTURBATIONS,
       perturbationResult: null,
+      graphSource: 'motif',
+      uploadFolderPath: null,
+      uploadFileCount: 0,
     }),
 }))

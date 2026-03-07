@@ -103,6 +103,21 @@ export interface GraphGenerateResponse {
   stats: GraphStats
 }
 
+export interface GraphUploadResponse {
+  graph_id: string
+  elements: CytoscapeElement[]
+  stats: GraphStats
+  file_count: number
+  folder_path: string | null
+  warnings: { filename: string; error: string }[]
+}
+
+export interface FolderSourceConfig {
+  folder_path: string
+  iteration_order: string
+  exhaustion_policy: string
+}
+
 export interface LabelAssignRequest {
   graph_id: string
   labeling_functions: LabelingFunctionConfig[]
@@ -169,11 +184,12 @@ export interface PerturbationResponse {
 
 export interface DatasetGenerateRequest {
   num_graphs: number
-  motifs: MotifConfig[]
-  composition: string
-  composition_params: Record<string, unknown>
-  num_extra_vertices: number
-  num_extra_edges: number
+  motifs?: MotifConfig[]
+  folder_source?: FolderSourceConfig
+  composition?: string
+  composition_params?: Record<string, unknown>
+  num_extra_vertices?: number
+  num_extra_edges?: number
   labeling_functions: LabelingFunctionConfig[]
   perturbations: PerturbationConfig[]
   max_perturbation_iterations: number
