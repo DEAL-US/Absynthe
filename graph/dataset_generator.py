@@ -1,10 +1,12 @@
 import os
 import json
+import warnings
 from typing import List, Tuple, Dict, Any, Optional
 
 import networkx as nx
 
 from interfaces import GraphGenerator, LabelingFunction, Perturbation
+from interfaces.exceptions import GraphSourceExhausted
 from interfaces.labeling_result import LabelingResult
 from graph.perturbation_engine import PerturbationPipeline
 
@@ -106,7 +108,14 @@ class GraphDatasetGenerator:
 
         for i in range(num_graphs):
             # 1. Generate base graph
-            graph = self.graph_generator.generate_graph(**graph_kwargs)
+            try:
+                graph = self.graph_generator.generate_graph(**graph_kwargs)
+            except GraphSourceExhausted as e:
+                warnings.warn(
+                    f"Graph source exhausted after {e.loaded} graphs "
+                    f"(requested {e.requested}). Stopping generation early."
+                )
+                break
 
             # 2. Compute and store expected labels
             labeling_result = None

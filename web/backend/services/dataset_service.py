@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 from graph.composite_graph_generator import MotifComposite
 from graph.dataset_generator import GraphDatasetGenerator
+from graph.folder_graph_generator import FolderGraphGenerator, IterationOrder, ExhaustionPolicy
 from web.backend.models.dataset_models import DatasetGenerateRequest, TaskStatus
 from web.backend.services.registry import (
     build_labeling_functions,
@@ -60,9 +61,16 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
     try:
         output_dir = os.path.abspath(request.output_dir)
 
-        graph_generator = MotifComposite(
-            motifs=[motif.to_list() for motif in request.motifs]
-        )
+        if request.folder_source:
+            graph_generator = FolderGraphGenerator(
+                folder_path=request.folder_source.folder_path,
+                iteration_order=IterationOrder(request.folder_source.iteration_order),
+                exhaustion_policy=ExhaustionPolicy(request.folder_source.exhaustion_policy),
+            )
+        else:
+            graph_generator = MotifComposite(
+                motifs=[motif.to_list() for motif in request.motifs]
+            )
         labeling_functions = build_labeling_functions(request.labeling_functions)
         perturbations = build_perturbations(request.perturbations)
 
