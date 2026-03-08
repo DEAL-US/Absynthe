@@ -13,14 +13,11 @@ from web.backend.services.registry import normalize_composition_params
 
 def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
     """Generate a composite graph and store it. Returns (graph_id, elements, stats)."""
-    import random
-
     from graph.composite_graph_generator import MotifComposite
+    from utils.rng import set_seed, reset_rng
 
-    prev_state = None
     if request.seed is not None:
-        prev_state = random.getstate()
-        random.seed(request.seed)
+        set_seed(request.seed)
 
     try:
         motif_lists = [m.to_list() for m in request.motifs]
@@ -32,8 +29,8 @@ def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
             composition_params=normalize_composition_params(request.composition_params),
         )
     finally:
-        if prev_state is not None:
-            random.setstate(prev_state)
+        if request.seed is not None:
+            reset_rng()
 
     motif_counts: dict = defaultdict(int)
     for _, data in graph.nodes(data=True):

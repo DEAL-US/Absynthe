@@ -56,7 +56,12 @@ def get_status(task_id: str) -> Optional[TaskStatus]:
 
 def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
     """Synchronous generation worker called from FastAPI BackgroundTasks."""
+    from utils.rng import set_seed, reset_rng
+
     _update(task_id, status="running", current=0)
+
+    if request.seed is not None:
+        set_seed(request.seed)
 
     try:
         output_dir = os.path.abspath(request.output_dir)
@@ -97,3 +102,6 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
         )
     except Exception as exc:  # noqa: BLE001
         _update(task_id, status="failed", error=str(exc))
+    finally:
+        if request.seed is not None:
+            reset_rng()

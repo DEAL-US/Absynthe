@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any, Tuple, List
 import networkx as nx
 from interfaces import Perturbation
 from .perturbation_strategies import STRATEGY_MAP
+from utils.rng import get_rng
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +30,7 @@ def remove_nodes(graph: nx.Graph,
         Tuple of (perturbed_graph, list_of_removed_nodes).
     """
     params = params or {}
-    rng = rng or random
+    rng = rng or get_rng()
 
     G = graph.copy()
     nodes = node_list if node_list is not None else list(G.nodes())
@@ -61,7 +62,7 @@ def perturb_edges(graph: nx.Graph,
         add_num: Explicit number of edges to add (if provided, p_add is ignored).
         rng: Random number generator.
     """
-    rng = rng or random
+    rng = rng or get_rng()
     G = graph.copy()
 
     if p_remove > 0:

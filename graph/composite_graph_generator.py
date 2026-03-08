@@ -3,8 +3,8 @@ from interfaces import GraphGenerator
 from motifs import motif_generators, motif_param_names
 from typing import List
 from collections import defaultdict
-import random
 from utils.graph_utils import add_vertices, add_random_edges
+from utils.rng import get_rng
 from graph.composition_engine import compose_motifs
 
 
@@ -62,22 +62,25 @@ class MotifComposite(GraphGenerator):
             current_start += len(motif_graph.nodes())
             motif_counts[base] += 1
 
+        # Resolve RNG
+        rng = kwargs.get('rng') or get_rng()
+
         # Compose motifs according to composition pattern
         pattern = kwargs.get('composition', 'sequential')
         comp_params = kwargs.get('composition_params', {}) or {}
 
-        motif_edges = compose_motifs(len(motif_node_sets), pattern, comp_params)
+        motif_edges = compose_motifs(len(motif_node_sets), pattern, comp_params, rng=rng)
         for i, j in motif_edges:
             if motif_node_sets[i] and motif_node_sets[j]:
-                node1 = random.choice(list(motif_node_sets[i]))
-                node2 = random.choice(list(motif_node_sets[j]))
+                node1 = rng.choice(list(motif_node_sets[i]))
+                node2 = rng.choice(list(motif_node_sets[j]))
                 combined_graph.add_edge(node1, node2)
 
         # Add extra vertices, each connected to a random existing node
-        combined_graph = add_vertices(combined_graph, num_extra_vertices)
+        combined_graph = add_vertices(combined_graph, num_extra_vertices, rng=rng)
 
         # Add extra edges randomly
         if num_extra_edges:
-            combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges)
+            combined_graph = add_random_edges(combined_graph, num_edges=num_extra_edges, rng=rng)
 
         return combined_graph

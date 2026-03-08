@@ -25,6 +25,7 @@ class DatasetGenerateRequest(BaseModel):
     perturbations: List[PerturbationConfig] = Field(default_factory=list)
     max_perturbation_iterations: int = Field(10, ge=1, le=200)
     output_dir: str = "datasets/output"
+    seed: Optional[int] = None
 
     @model_validator(mode="after")
     def validate_graph_source(self):

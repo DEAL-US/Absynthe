@@ -1,6 +1,7 @@
 import random
 from typing import List, Tuple, Dict, Optional
 import networkx as nx
+from utils.rng import get_rng
 
 
 def compose_motifs(n_motifs: int, pattern: str = 'sequential', params: Dict = None, rng: Optional[random.Random] = None) -> List[Tuple[int, int]]:
@@ -10,7 +11,7 @@ def compose_motifs(n_motifs: int, pattern: str = 'sequential', params: Dict = No
     Supported patterns: sequential, er, ba, sbm, star, hierarchical
     """
     params = params or {}
-    rnd = rng or random
+    rnd = rng or get_rng()
     edges: List[Tuple[int, int]] = []
     if n_motifs <= 1:
         return edges

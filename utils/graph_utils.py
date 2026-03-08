@@ -1,5 +1,6 @@
 import networkx as nx
 import random
+from utils.rng import get_rng
 
 def add_random_edges(graph: nx.Graph, p: float = None, num_edges: int = None, rng: random.Random = None) -> nx.Graph:
     """Add random edges to the graph. Can add a percentage p of random edges based on the original number of edges,
@@ -24,7 +25,7 @@ def add_random_edges(graph: nx.Graph, p: float = None, num_edges: int = None, rn
         num_to_add = num_edges
     else:
         raise ValueError("Must provide either 'p' or 'num_edges'")
-    rnd = rng or random
+    rnd = rng or get_rng()
     nodes = list(new_graph.nodes())
     added = 0
     while added < num_to_add:
@@ -48,7 +49,7 @@ def add_vertices(graph: nx.Graph, num_vertices: int, rng: random.Random = None) 
     """
     new_graph = graph.copy()
     current_max = max(new_graph.nodes()) if new_graph.nodes() else -1
-    rnd = rng or random
+    rnd = rng or get_rng()
     for i in range(num_vertices):
         new_node = current_max + 1 + i
         new_graph.add_node(new_node)

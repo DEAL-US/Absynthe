@@ -1,6 +1,5 @@
 import logging
 import os
-import random
 from enum import Enum
 from typing import List
 
@@ -8,6 +7,7 @@ import networkx as nx
 
 from interfaces import GraphGenerator
 from interfaces.exceptions import GraphSourceExhausted
+from utils.rng import get_rng
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class FolderGraphGenerator(GraphGenerator):
         """Initialize or re-shuffle the iteration order."""
         if self.iteration_order == IterationOrder.RANDOM:
             self._order = list(range(self._total))
-            random.shuffle(self._order)
+            get_rng().shuffle(self._order)
         else:
             self._order = list(range(self._total))
         self._index = 0
