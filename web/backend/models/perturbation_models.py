@@ -1,5 +1,5 @@
 """Request / response models for perturbation endpoints."""
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,7 @@ class PerturbationRequest(BaseModel):
     labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
     perturbations: List[PerturbationConfig] = Field(..., min_length=1)
     max_iterations: int = Field(10, ge=1, le=200)
+    seed: Optional[int] = None
 
 
 class ChangedNode(BaseModel):

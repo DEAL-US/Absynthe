@@ -69,6 +69,7 @@ export function DatasetStudioPage() {
   const [perturbations, setPerturbations] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxPerturbIter, setMaxPerturbIter] = useState(10)
   const [outputDir, setOutputDir] = useState('datasets/output')
+  const [seed, setSeed] = useState<number | undefined>(undefined)
   const [iterationOrder, setIterationOrder] = useState('sequential')
   const [exhaustionPolicy, setExhaustionPolicy] = useState('stop')
 
@@ -191,6 +192,7 @@ export function DatasetStudioPage() {
               perturbations,
               max_perturbation_iterations: maxPerturbIter,
               output_dir: outputDir,
+              ...(seed !== undefined && { seed }),
             }
           : {
               num_graphs: numGraphs,
@@ -203,6 +205,7 @@ export function DatasetStudioPage() {
               perturbations,
               max_perturbation_iterations: maxPerturbIter,
               output_dir: outputDir,
+              ...(seed !== undefined && { seed }),
             },
       )
       setTaskId(task_id)
@@ -220,6 +223,12 @@ export function DatasetStudioPage() {
       <PagePanel className="w-80 shrink-0 overflow-y-auto">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Dataset Config</p>
         <Slider label="Number of graphs" value={numGraphs} min={1} max={1000} step={1} onValueChange={setNumGraphs} />
+        <Input
+          label="Seed (optional)"
+          type="number"
+          value={seed !== undefined ? String(seed) : ''}
+          onChange={(e) => setSeed(e.target.value ? Number.parseInt(e.target.value, 10) : undefined)}
+        />
 
         {isUploadMode ? (
           <div className="border-t border-white/10 pt-3 flex flex-col gap-3">

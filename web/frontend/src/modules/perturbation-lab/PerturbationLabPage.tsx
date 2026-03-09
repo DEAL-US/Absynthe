@@ -57,6 +57,7 @@ export function PerturbationLabPage() {
   const [schemas, setSchemas] = useState<PerturbationSchema[]>([])
   const [configs, setConfigs] = useState<PerturbationConfig[]>(savedPerturbations)
   const [maxIterations, setMaxIterations] = useState(10)
+  const [seed, setSeed] = useState<number | undefined>(undefined)
   const [activePreviewTab, setActivePreviewTab] = useState<string>('0')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,6 +122,7 @@ export function PerturbationLabPage() {
         labeling_functions: labelingFunctions,
         perturbations: configs,
         max_iterations: maxIterations,
+        ...(seed !== undefined && { seed }),
       })
       setPerturbations(configs)
       setPerturbationResult(res, configs)
@@ -169,7 +171,7 @@ export function PerturbationLabPage() {
                     max={10}
                     onValueChange={(value) => updateCount(idx, value)}
                   />
-                  <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                  <p className="text-[11px] text-amber-600 leading-relaxed">
                     Used for dataset generation volume. Preview tabs show one successful example per perturbation.
                   </p>
 
@@ -215,7 +217,7 @@ export function PerturbationLabPage() {
           </div>
         )}
 
-        <div className="border-t border-white/10 pt-4">
+        <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
           <Slider
             label="Max iterations per perturbation"
             value={maxIterations}
@@ -223,17 +225,23 @@ export function PerturbationLabPage() {
             max={100}
             onValueChange={setMaxIterations}
           />
+          <Input
+            label="Seed (optional)"
+            type="number"
+            value={seed !== undefined ? String(seed) : ''}
+            onChange={(e) => setSeed(e.target.value ? Number.parseInt(e.target.value, 10) : undefined)}
+          />
         </div>
 
         {!graphId && (
-          <p className="text-xs text-amber-400 bg-amber-900/20 rounded-lg p-2">
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
             No graph loaded. Generate and label a graph first.
           </p>
         )}
         {error && <p className="text-xs text-red-400 bg-red-900/20 rounded-lg p-2">{error}</p>}
 
         {perturbationResult && !perturbationResult.success && (
-          <p className="text-xs text-amber-400 bg-amber-900/20 rounded-lg p-2">
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
             {perturbationResult.message}
           </p>
         )}

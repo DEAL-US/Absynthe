@@ -138,6 +138,7 @@ export interface PerturbationRequest {
   labeling_functions: LabelingFunctionConfig[]
   perturbations: PerturbationConfig[]
   max_iterations: number
+  seed?: number
 }
 
 export interface ChangedNode {
@@ -194,6 +195,7 @@ export interface DatasetGenerateRequest {
   perturbations: PerturbationConfig[]
   max_perturbation_iterations: number
   output_dir: string
+  seed?: number
 }
 
 export interface TaskStatus {

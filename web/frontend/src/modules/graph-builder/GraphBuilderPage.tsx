@@ -28,6 +28,7 @@ export function GraphBuilderPage() {
   const [compParams, setCompParams] = useState<Record<string, number | string>>({})
   const [extraVertices, setExtraVertices] = useState(0)
   const [extraEdges, setExtraEdges] = useState(0)
+  const [seed, setSeed] = useState<number | undefined>(undefined)
 
   // ── Upload mode state ──
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -58,6 +59,7 @@ export function GraphBuilderPage() {
         composition_params: compParams,
         num_extra_vertices: extraVertices,
         num_extra_edges: extraEdges,
+        ...(seed !== undefined && { seed }),
       })
       setGraph(res.graph_id, res.elements)
     } catch (e) {
@@ -226,6 +228,12 @@ export function GraphBuilderPage() {
                   min={0}
                   max={20}
                   onValueChange={setExtraEdges}
+                />
+                <Input
+                  label="Seed (optional)"
+                  type="number"
+                  value={seed !== undefined ? String(seed) : ''}
+                  onChange={(e) => setSeed(e.target.value ? Number.parseInt(e.target.value, 10) : undefined)}
                 />
               </div>
 

@@ -131,7 +131,7 @@ export function GraphDiffView({
             </Badge>
           )}
           {changedNodes.length > 0 && (
-            <Badge className="bg-orange-500/20 text-orange-300 border-orange-500/30">
+            <Badge className="bg-orange-50 text-orange-700 border-orange-200">
               {changedNodes.length} label change{changedNodes.length !== 1 ? 's' : ''}
             </Badge>
           )}

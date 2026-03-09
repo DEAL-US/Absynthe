@@ -193,7 +193,7 @@ export function LabelInspectorPage() {
         )}
 
         {!graphId && (
-          <p className="text-xs text-amber-400 bg-amber-900/20 rounded-lg p-2">
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
             No graph loaded. Go to Graph Builder first.
           </p>
         )}

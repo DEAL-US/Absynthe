@@ -57,80 +57,88 @@ def _map_edge_info(changes: dict) -> Dict[str, EdgePerturbInfo]:
 def apply(request: PerturbationRequest) -> PerturbationResponse:
     """Apply configured perturbations and return preview diff payloads."""
     from graph.perturbation_engine import PerturbationPipeline
+    from utils.rng import set_seed, reset_rng
 
-    original_graph = graph_store.get(request.graph_id)
-    original_elements = serialization.graph_to_elements(original_graph)
+    if request.seed is not None:
+        set_seed(request.seed)
 
-    labelers = build_labeling_functions(request.labeling_functions)
-    if not request.perturbations:
-        raise ValueError("At least one perturbation must be configured.")
+    try:
+        original_graph = graph_store.get(request.graph_id)
+        original_elements = serialization.graph_to_elements(original_graph)
 
-    previews: List[PerturbationPreview] = []
-    primary_graph = None
-    primary_preview = None
+        labelers = build_labeling_functions(request.labeling_functions)
+        if not request.perturbations:
+            raise ValueError("At least one perturbation must be configured.")
 
-    for idx, perturb_config in enumerate(request.perturbations):
-        pipeline = PerturbationPipeline(
-            perturbations=[(build_perturbation(perturb_config), perturb_config.count)],
-            labeling_functions=labelers,
-            max_iterations=request.max_iterations,
-        )
-        results = pipeline.apply_and_check(original_graph)
+        previews: List[PerturbationPreview] = []
+        primary_graph = None
+        primary_preview = None
 
-        if results:
-            result = results[0]
-            perturbed_graph = result["perturbed_graph"]
-            _apply_observed_labels(perturbed_graph, labelers)
-            changes = result.get("changes", {})
-            changed_nodes = _map_changed_nodes(result.get("changed_nodes", {}))
-            success = True
-            message = ""
-        else:
-            perturbed_graph = original_graph.copy()
-            _apply_observed_labels(perturbed_graph, labelers)
-            changes = {}
-            changed_nodes = []
-            success = False
-            message = (
-                f"No label changes produced for perturbation "
-                f"'{perturb_config.type}'."
+        for idx, perturb_config in enumerate(request.perturbations):
+            pipeline = PerturbationPipeline(
+                perturbations=[(build_perturbation(perturb_config), perturb_config.count)],
+                labeling_functions=labelers,
+                max_iterations=request.max_iterations,
             )
+            results = pipeline.apply_and_check(original_graph)
 
-        preview = PerturbationPreview(
-            config_index=idx,
-            perturbation_type=perturb_config.type,
-            desired_count=perturb_config.count,
-            success=success,
-            message=message,
-            original_elements=original_elements,
-            perturbed_elements=serialization.graph_to_elements(perturbed_graph),
-            removed_nodes=[str(node) for node in changes.get("removed_nodes", [])],
-            changed_nodes=changed_nodes,
-            edge_perturb_info=_map_edge_info(changes),
+            if results:
+                result = results[0]
+                perturbed_graph = result["perturbed_graph"]
+                _apply_observed_labels(perturbed_graph, labelers)
+                changes = result.get("changes", {})
+                changed_nodes = _map_changed_nodes(result.get("changed_nodes", {}))
+                success = True
+                message = ""
+            else:
+                perturbed_graph = original_graph.copy()
+                _apply_observed_labels(perturbed_graph, labelers)
+                changes = {}
+                changed_nodes = []
+                success = False
+                message = (
+                    f"No label changes produced for perturbation "
+                    f"'{perturb_config.type}'."
+                )
+
+            preview = PerturbationPreview(
+                config_index=idx,
+                perturbation_type=perturb_config.type,
+                desired_count=perturb_config.count,
+                success=success,
+                message=message,
+                original_elements=original_elements,
+                perturbed_elements=serialization.graph_to_elements(perturbed_graph),
+                removed_nodes=[str(node) for node in changes.get("removed_nodes", [])],
+                changed_nodes=changed_nodes,
+                edge_perturb_info=_map_edge_info(changes),
+            )
+            previews.append(preview)
+
+            if primary_preview is None and success:
+                primary_preview = preview
+                primary_graph = perturbed_graph
+
+        if primary_preview is None:
+            primary_preview = previews[0]
+            primary_graph = original_graph.copy()
+            _apply_observed_labels(primary_graph, labelers)
+
+        perturbed_id = graph_store.store(primary_graph)
+        any_success = any(preview.success for preview in previews)
+
+        return PerturbationResponse(
+            original_graph_id=request.graph_id,
+            perturbed_graph_id=perturbed_id,
+            original_elements=primary_preview.original_elements,
+            perturbed_elements=primary_preview.perturbed_elements,
+            removed_nodes=primary_preview.removed_nodes,
+            changed_nodes=primary_preview.changed_nodes,
+            edge_perturb_info=primary_preview.edge_perturb_info,
+            previews=previews,
+            success=any_success,
+            message="" if any_success else "No perturbation caused label changes.",
         )
-        previews.append(preview)
-
-        if primary_preview is None and success:
-            primary_preview = preview
-            primary_graph = perturbed_graph
-
-    if primary_preview is None:
-        primary_preview = previews[0]
-        primary_graph = original_graph.copy()
-        _apply_observed_labels(primary_graph, labelers)
-
-    perturbed_id = graph_store.store(primary_graph)
-    any_success = any(preview.success for preview in previews)
-
-    return PerturbationResponse(
-        original_graph_id=request.graph_id,
-        perturbed_graph_id=perturbed_id,
-        original_elements=primary_preview.original_elements,
-        perturbed_elements=primary_preview.perturbed_elements,
-        removed_nodes=primary_preview.removed_nodes,
-        changed_nodes=primary_preview.changed_nodes,
-        edge_perturb_info=primary_preview.edge_perturb_info,
-        previews=previews,
-        success=any_success,
-        message="" if any_success else "No perturbation caused label changes.",
-    )
+    finally:
+        if request.seed is not None:
+            reset_rng()
