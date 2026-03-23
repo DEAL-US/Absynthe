@@ -72,10 +72,26 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
                 iteration_order=IterationOrder(request.folder_source.iteration_order),
                 exhaustion_policy=ExhaustionPolicy(request.folder_source.exhaustion_policy),
             )
+        elif any(m.count_distribution for m in request.motifs):
+            from graph.random_motif_composite import RandomMotifComposite
+            from utils.distributions import IntDistribution
+
+            motif_configs = [
+                (
+                    m.to_list(),
+                    m.count,
+                    IntDistribution(type=m.count_distribution.type, params=dict(m.count_distribution.params))
+                    if m.count_distribution
+                    else None,
+                )
+                for m in request.motifs
+            ]
+            graph_generator = RandomMotifComposite(motif_configs=motif_configs)
         else:
-            graph_generator = MotifComposite(
-                motifs=[motif.to_list() for motif in request.motifs]
-            )
+            motif_lists = []
+            for m in request.motifs:
+                motif_lists.extend([m.to_list()] * m.count)
+            graph_generator = MotifComposite(motifs=motif_lists)
         labeling_functions = build_labeling_functions(request.labeling_functions)
         perturbations = build_perturbations(request.perturbations)
 

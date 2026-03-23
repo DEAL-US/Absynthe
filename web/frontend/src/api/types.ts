@@ -66,9 +66,23 @@ export interface PerturbationSchema {
   params: ParamSchema[]
 }
 
+export interface IntDistribution {
+  type: 'uniform' | 'normal' | 'poisson'
+  params: Record<string, number>
+}
+
+export interface DistributionSchema {
+  type: string
+  label: string
+  description: string
+  params: ParamSchema[]
+}
+
 export interface MotifConfig {
   type: string
   params: (number | string)[]
+  count?: number
+  count_distribution?: IntDistribution
 }
 
 export interface LabelingFunctionConfig {

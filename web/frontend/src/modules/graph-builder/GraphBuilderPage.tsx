@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { FolderUp, GripVertical, Plus, Trash2, Upload } from 'lucide-react'
+import { Dice5, FolderUp, GripVertical, Plus, Trash2, Upload } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getCompositions, getMotifs } from '@/api/capabilities'
+import { getCompositions, getDistributions, getMotifs } from '@/api/capabilities'
 import { generateGraph, uploadGraphs } from '@/api/graph'
-import type { CompositionSchema, MotifConfig, MotifSchema } from '@/api/types'
+import type { CompositionSchema, DistributionSchema, IntDistribution, MotifConfig, MotifSchema } from '@/api/types'
 import { GraphCanvas } from '@/components/graph/GraphCanvas'
 import { GraphInfoPanel } from '@/components/graph/GraphInfoPanel'
 import { PageContainer, PagePanel } from '@/components/layout/PageContainer'
@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
+import { DistributionInput } from '@/components/ui/DistributionInput'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { useGraphState } from '@/hooks/useGraphState'
 
@@ -23,6 +24,7 @@ export function GraphBuilderPage() {
   // ── Motif mode state ──
   const [motifSchemas, setMotifSchemas] = useState<MotifSchema[]>([])
   const [compSchemas, setCompSchemas] = useState<CompositionSchema[]>([])
+  const [distributionSchemas, setDistributionSchemas] = useState<DistributionSchema[]>([])
   const [motifs, setMotifs] = useState<MotifConfig[]>([{ type: 'cycle', params: [4] }, { type: 'house', params: [] }])
   const [composition, setComposition] = useState('sequential')
   const [compParams, setCompParams] = useState<Record<string, number | string>>({})
@@ -44,6 +46,7 @@ export function GraphBuilderPage() {
   useEffect(() => {
     getMotifs().then(setMotifSchemas).catch(() => {})
     getCompositions().then(setCompSchemas).catch(() => {})
+    getDistributions().then(setDistributionSchemas).catch(() => {})
   }, [])
 
   const selectedCompSchema = compSchemas.find((c) => c.id === composition)
@@ -72,7 +75,7 @@ export function GraphBuilderPage() {
   const addMotif = (type: string) => {
     const schema = motifSchemas.find((m) => m.type === type)
     const params = schema?.params.map((p) => p.default as number) ?? []
-    setMotifs((prev) => [...prev, { type, params }])
+    setMotifs((prev) => [...prev, { type, params, count: 1 }])
   }
 
   const updateMotifParam = (idx: number, paramIdx: number, value: number | string) => {
@@ -83,6 +86,41 @@ export function GraphBuilderPage() {
         newParams[paramIdx] = value
         return { ...m, params: newParams }
       }),
+    )
+  }
+
+  const updateMotifCount = (idx: number, count: number) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => (i === idx ? { ...m, count: Math.max(1, count), count_distribution: undefined } : m)),
+    )
+  }
+
+  const toggleMotifDistribution = (idx: number) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => {
+        if (i !== idx) return m
+        if (m.count_distribution) {
+          return { ...m, count_distribution: undefined }
+        }
+        const defaultSchema = distributionSchemas[0]
+        const params: Record<string, number> = {}
+        for (const p of defaultSchema?.params ?? []) {
+          params[p.name] = p.default as number
+        }
+        return {
+          ...m,
+          count_distribution: {
+            type: (defaultSchema?.type ?? 'uniform') as IntDistribution['type'],
+            params,
+          },
+        }
+      }),
+    )
+  }
+
+  const updateMotifDistribution = (idx: number, dist: IntDistribution) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => (i === idx ? { ...m, count_distribution: dist } : m)),
     )
   }
 
@@ -154,11 +192,35 @@ export function GraphBuilderPage() {
                           <GripVertical className="w-4 h-4 text-gray-600 shrink-0" />
                           <Badge color="#6366f1">{m.type}</Badge>
                           <button
+                            onClick={() => toggleMotifDistribution(idx)}
+                            className={`ml-auto p-1 rounded transition-colors ${m.count_distribution ? 'text-brand-400 bg-brand-500/20' : 'text-gray-600 hover:text-gray-400'}`}
+                            title={m.count_distribution ? 'Switch to fixed count' : 'Use random distribution'}
+                          >
+                            <Dice5 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => removeMotif(idx)}
-                            className="ml-auto text-gray-600 hover:text-red-400 transition-colors"
+                            className="text-gray-600 hover:text-red-400 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                        </div>
+                        <div className="mt-2">
+                          {m.count_distribution ? (
+                            <DistributionInput
+                              value={m.count_distribution}
+                              onChange={(dist) => updateMotifDistribution(idx, dist)}
+                              schemas={distributionSchemas}
+                            />
+                          ) : (
+                            <Slider
+                              label="Count"
+                              value={m.count ?? 1}
+                              min={1}
+                              max={20}
+                              onValueChange={(v) => updateMotifCount(idx, v)}
+                            />
+                          )}
                         </div>
                         {schema?.params.map((p, pi) => (
                           <div key={p.name} className="mt-2">

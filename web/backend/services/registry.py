@@ -107,6 +107,35 @@ STRATEGY_SCHEMAS: List[Dict[str, Any]] = [
     },
 ]
 
+DISTRIBUTION_SCHEMAS: List[Dict[str, Any]] = [
+    {
+        "type": "uniform",
+        "label": "Uniform",
+        "description": "Equally likely between min and max",
+        "params": [
+            {"name": "min", "label": "Min", "type": "int", "default": 1, "min": 1},
+            {"name": "max", "label": "Max", "type": "int", "default": 5, "min": 1},
+        ],
+    },
+    {
+        "type": "normal",
+        "label": "Normal",
+        "description": "Bell curve around mean, clamped to >= 1",
+        "params": [
+            {"name": "mean", "label": "Mean", "type": "float", "default": 3.0, "min": 0.1},
+            {"name": "std", "label": "Std Dev", "type": "float", "default": 1.0, "min": 0.1},
+        ],
+    },
+    {
+        "type": "poisson",
+        "label": "Poisson",
+        "description": "Count events with average rate lambda",
+        "params": [
+            {"name": "lambda", "label": "Lambda", "type": "float", "default": 3.0, "min": 0.1},
+        ],
+    },
+]
+
 LABELING_FUNCTION_SCHEMAS: List[Dict[str, Any]] = [
     {
         "id": "motif_labeling",

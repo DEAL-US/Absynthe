@@ -20,7 +20,18 @@ def generate(request: GraphGenerateRequest) -> Tuple[str, list, GraphStats]:
         set_seed(request.seed)
 
     try:
-        motif_lists = [m.to_list() for m in request.motifs]
+        from utils.distributions import IntDistribution, sample_int
+        from utils.rng import get_rng
+
+        rng = get_rng()
+        motif_lists = []
+        for m in request.motifs:
+            if m.count_distribution:
+                dist = IntDistribution(type=m.count_distribution.type, params=dict(m.count_distribution.params))
+                n = sample_int(dist, rng)
+            else:
+                n = m.count
+            motif_lists.extend([m.to_list()] * n)
         generator = MotifComposite(motifs=motif_lists)
         graph: nx.Graph = generator.generate_graph(
             num_extra_vertices=request.num_extra_vertices,

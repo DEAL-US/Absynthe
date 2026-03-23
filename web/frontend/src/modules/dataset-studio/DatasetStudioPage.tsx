@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Database, Download, FolderUp, Play, Plus, Trash2 } from 'lucide-react'
+import { Database, Dice5, Download, FolderUp, Play, Plus, Trash2 } from 'lucide-react'
 import { generateDataset } from '@/api/dataset'
 import {
   getCompositions,
+  getDistributions,
   getLabelingFunctions,
   getMotifs,
   getPerturbations,
 } from '@/api/capabilities'
 import type {
   CompositionSchema,
+  DistributionSchema,
+  IntDistribution,
   LabelingFunctionConfig,
   LabelingFunctionSchema,
   MotifConfig,
@@ -27,6 +30,7 @@ import { Select } from '@/components/ui/Select'
 import { Slider } from '@/components/ui/Slider'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Card, CardContent } from '@/components/ui/Card'
+import { DistributionInput } from '@/components/ui/DistributionInput'
 import { useGraphState } from '@/hooks/useGraphState'
 
 function schemaDefaults(schema: { params: ParamSchema[] }): Record<string, unknown> {
@@ -58,6 +62,7 @@ export function DatasetStudioPage() {
   const [compositionSchemas, setCompositionSchemas] = useState<CompositionSchema[]>([])
   const [labelingSchemas, setLabelingSchemas] = useState<LabelingFunctionSchema[]>([])
   const [perturbationSchemas, setPerturbationSchemas] = useState<PerturbationSchema[]>([])
+  const [distributionSchemas, setDistributionSchemas] = useState<DistributionSchema[]>([])
 
   const [numGraphs, setNumGraphs] = useState(20)
   const [motifs, setMotifs] = useState<MotifConfig[]>([{ type: 'cycle', params: [4] }, { type: 'house', params: [] }])
@@ -98,6 +103,7 @@ export function DatasetStudioPage() {
   useEffect(() => {
     getMotifs().then(setMotifSchemas).catch(() => {})
     getCompositions().then(setCompositionSchemas).catch(() => {})
+    getDistributions().then(setDistributionSchemas).catch(() => {})
     getLabelingFunctions()
       .then((schemas) => {
         setLabelingSchemas(schemas)
@@ -129,11 +135,46 @@ export function DatasetStudioPage() {
 
   const addMotif = (type: string) => {
     const schema = motifSchemas.find((s) => s.type === type)
-    setMotifs((prev) => [...prev, { type, params: schema?.params.map((p) => p.default) ?? [] }])
+    setMotifs((prev) => [...prev, { type, params: schema?.params.map((p) => p.default) ?? [], count: 1 }])
   }
 
   const removeMotif = (idx: number) => {
     setMotifs((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const updateMotifCount = (idx: number, count: number) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => (i === idx ? { ...m, count: Math.max(1, count), count_distribution: undefined } : m)),
+    )
+  }
+
+  const toggleMotifDistribution = (idx: number) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => {
+        if (i !== idx) return m
+        if (m.count_distribution) {
+          return { ...m, count_distribution: undefined }
+        }
+        const defaultSchema = distributionSchemas[0]
+        const params: Record<string, number> = {}
+        for (const p of defaultSchema?.params ?? []) {
+          params[p.name] = p.default as number
+        }
+        return {
+          ...m,
+          count_distribution: {
+            type: (defaultSchema?.type ?? 'uniform') as IntDistribution['type'],
+            params,
+          },
+        }
+      }),
+    )
+  }
+
+  const updateMotifDistribution = (idx: number, dist: IntDistribution) => {
+    setMotifs((prev) =>
+      prev.map((m, i) => (i === idx ? { ...m, count_distribution: dist } : m)),
+    )
   }
 
   const addLabeling = (type: string) => {
@@ -265,12 +306,41 @@ export function DatasetStudioPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Motifs</p>
               <div className="flex flex-col gap-1.5 mb-2">
                 {motifs.map((motif, idx) => (
-                  <div key={`${motif.type}-${idx}`} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2">
-                    <Badge color="#6366f1">{motif.type}</Badge>
-                    {motif.params.length > 0 && (
-                      <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
-                    )}
-                    <button onClick={() => removeMotif(idx)} className="ml-auto text-gray-600 hover:text-red-400 transition-colors text-xs">×</button>
+                  <div key={`${motif.type}-${idx}`} className="rounded-lg bg-white/5 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Badge color="#6366f1">{motif.type}</Badge>
+                      {motif.params.length > 0 && (
+                        <span className="text-xs text-gray-500 font-mono">{motif.params.join(', ')}</span>
+                      )}
+                      <button
+                        onClick={() => toggleMotifDistribution(idx)}
+                        className={`ml-auto p-1 rounded transition-colors ${motif.count_distribution ? 'text-brand-400 bg-brand-500/20' : 'text-gray-600 hover:text-gray-400'}`}
+                        title={motif.count_distribution ? 'Switch to fixed count' : 'Use random distribution'}
+                      >
+                        <Dice5 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => removeMotif(idx)} className="text-gray-600 hover:text-red-400 transition-colors text-xs">×</button>
+                    </div>
+                    <div className="mt-1.5">
+                      {motif.count_distribution ? (
+                        <DistributionInput
+                          value={motif.count_distribution}
+                          onChange={(dist) => updateMotifDistribution(idx, dist)}
+                          schemas={distributionSchemas}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-500">Count</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={motif.count ?? 1}
+                            onChange={(e) => updateMotifCount(idx, Number.parseInt(e.target.value || '1', 10))}
+                            className="w-16 h-7 rounded border border-white/15 bg-white/5 px-2 text-xs text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

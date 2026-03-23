@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from web.backend.models.common import CytoscapeElement
+from web.backend.models.distribution_models import IntDistributionModel
 
 
 class MotifConfig(BaseModel):
@@ -11,6 +12,11 @@ class MotifConfig(BaseModel):
     params: List[Any] = Field(
         default_factory=list,
         description="Positional params for the motif generator, e.g. [4] for cycle",
+    )
+    count: int = Field(1, ge=1, description="Fixed number of instances of this motif")
+    count_distribution: Optional[IntDistributionModel] = Field(
+        None,
+        description="Random distribution for the instance count (overrides count when present)",
     )
 
     def to_list(self) -> list:
