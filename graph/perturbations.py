@@ -105,7 +105,18 @@ class RemoveNodesPerturbation(Perturbation):
             graph, self.num_nodes, self.strategy,
             self.params, self.rng, self.node_list
         )
-        return new_graph, {"removed_nodes": removed}
+        removed_info = []
+        for n in removed:
+            incident = [
+                {"u": n, "v": nb, "attrs": dict(graph.edges[n, nb])}
+                for nb in graph.neighbors(n)
+            ]
+            removed_info.append({
+                "id": n,
+                "attrs": dict(graph.nodes[n]),
+                "edges": incident,
+            })
+        return new_graph, {"removed_nodes": removed_info}
 
 
 class RemoveEdgesPerturbation(Perturbation):
@@ -119,7 +130,11 @@ class RemoveEdgesPerturbation(Perturbation):
     def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(graph, p_remove=self.p_remove, rng=self.rng)
         removed = set(graph.edges()) - set(new_graph.edges())
-        return new_graph, {"removed_edges": list(removed)}
+        removed_info = [
+            {"u": u, "v": v, "attrs": dict(graph.edges[u, v])}
+            for u, v in removed
+        ]
+        return new_graph, {"removed_edges": removed_info}
 
 
 class AddEdgesPerturbation(Perturbation):
@@ -136,7 +151,8 @@ class AddEdgesPerturbation(Perturbation):
             graph, p_add=self.p_add, add_num=self.add_num, rng=self.rng
         )
         added = set(new_graph.edges()) - set(graph.edges())
-        return new_graph, {"added_edges": list(added)}
+        added_info = [{"u": u, "v": v} for u, v in added]
+        return new_graph, {"added_edges": added_info}
 
 
 class EdgePerturbation(Perturbation):
@@ -157,7 +173,14 @@ class EdgePerturbation(Perturbation):
         )
         before_edges = set(graph.edges())
         after_edges = set(new_graph.edges())
+        removed_edges = before_edges - after_edges
+        added_edges = after_edges - before_edges
         return new_graph, {
-            "removed_edges": list(before_edges - after_edges),
-            "added_edges": list(after_edges - before_edges),
+            "removed_edges": [
+                {"u": u, "v": v, "attrs": dict(graph.edges[u, v])}
+                for u, v in removed_edges
+            ],
+            "added_edges": [
+                {"u": u, "v": v} for u, v in added_edges
+            ],
         }

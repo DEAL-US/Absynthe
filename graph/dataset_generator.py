@@ -85,15 +85,19 @@ class GraphDatasetGenerator:
         return merged
 
     def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
-        """Generate a dataset of graphs.
+        """Generate a dataset of perturbed graph variants.
 
         For each base graph:
         1. Generate the graph using graph_generator
-        2. Compute and store expected labels (pre-perturbation)
-        3. Save the original graph
-        4. Apply perturbations to the ORIGINAL graph, each producing an
+        2. Compute expected labels (pre-perturbation) so the pipeline can
+           detect label changes and surviving nodes inherit the labels
+        3. Apply perturbations to the ORIGINAL graph, each producing an
            independent perturbed variant
-        5. For each variant, compute observed labels and save
+        4. For each variant, compute observed labels and save it
+
+        The base (unperturbed) graph is NOT written to disk. Instead, each
+        variant's metadata entry carries a reversible ``perturbation_info.changes``
+        dict — see ``graph.reconstruction.reconstruct_original``.
 
         Args:
             num_graphs: Number of base graphs to generate.
@@ -101,13 +105,12 @@ class GraphDatasetGenerator:
                 graph_generator.generate_graph().
 
         Returns:
-            Metadata list with one entry per saved graph (originals + variants).
+            Metadata list with one entry per saved perturbed variant.
         """
         metadata = []
         graph_counter = 0
 
         for i in range(num_graphs):
-            # 1. Generate base graph
             try:
                 graph = self.graph_generator.generate_graph(**graph_kwargs)
             except GraphSourceExhausted as e:
@@ -117,27 +120,18 @@ class GraphDatasetGenerator:
                 )
                 break
 
-            # 2. Compute and store expected labels
             labeling_result = None
             if self.labeling_functions:
                 labeling_result = self._compute_and_store_labels(graph, 'expected_ground_truth')
 
-            # 3. Save original graph
-            graph_path = os.path.join(self.graph_dir, f"graph_{graph_counter}.graphml")
-            self.save_graph(graph, graph_path)
-            entry: Dict[str, Any] = {
-                "graph_id": graph_counter,
-                "base_graph_id": i,
-                "graph_path": graph_path,
-                "is_original": True,
-                "perturbation_info": None,
-            }
+            base_graph_labels = None
+            base_motif_instances = None
             if labeling_result:
                 if labeling_result.graph_labels:
-                    entry["graph_labels"] = labeling_result.graph_labels
+                    base_graph_labels = dict(labeling_result.graph_labels)
                 instances = labeling_result.metadata.get("instances")
                 if instances:
-                    entry["motif_instances"] = [
+                    base_motif_instances = [
                         {
                             "motif_name": inst["motif_name"],
                             "nodes": sorted(inst["nodes"]),
@@ -145,38 +139,40 @@ class GraphDatasetGenerator:
                         }
                         for inst in instances
                     ]
-            metadata.append(entry)
-            graph_counter += 1
 
-            # 4. Apply perturbations to the ORIGINAL graph
-            if self.perturbations and self.labeling_functions:
-                pipeline = PerturbationPipeline(
-                    perturbations=self.perturbations,
-                    labeling_functions=self.labeling_functions,
-                    max_iterations=self.max_perturbation_iterations,
+            if not (self.perturbations and self.labeling_functions):
+                continue
+
+            pipeline = PerturbationPipeline(
+                perturbations=self.perturbations,
+                labeling_functions=self.labeling_functions,
+                max_iterations=self.max_perturbation_iterations,
+            )
+            results = pipeline.apply_and_check(graph)
+
+            for result in results:
+                perturbed = result["perturbed_graph"]
+                self._compute_and_store_labels(perturbed, 'observed_ground_truth')
+
+                variant_path = os.path.join(
+                    self.graph_dir, f"graph_{graph_counter}.graphml"
                 )
-                results = pipeline.apply_and_check(graph)
-
-                # 5. Save each perturbed variant
-                for result in results:
-                    perturbed = result["perturbed_graph"]
-                    self._compute_and_store_labels(perturbed, 'observed_ground_truth')
-
-                    variant_path = os.path.join(
-                        self.graph_dir, f"graph_{graph_counter}.graphml"
-                    )
-                    self.save_graph(perturbed, variant_path)
-                    metadata.append({
-                        "graph_id": graph_counter,
-                        "base_graph_id": i,
-                        "graph_path": variant_path,
-                        "is_original": False,
-                        "perturbation_info": {
-                            "changes": result["changes"],
-                            "changed_nodes": result["changed_nodes"],
-                        },
-                    })
-                    graph_counter += 1
+                self.save_graph(perturbed, variant_path)
+                entry: Dict[str, Any] = {
+                    "graph_id": graph_counter,
+                    "base_graph_id": i,
+                    "graph_path": variant_path,
+                    "perturbation_info": {
+                        "changes": result["changes"],
+                        "changed_nodes": result["changed_nodes"],
+                    },
+                }
+                if base_graph_labels:
+                    entry["graph_labels"] = base_graph_labels
+                if base_motif_instances:
+                    entry["motif_instances"] = base_motif_instances
+                metadata.append(entry)
+                graph_counter += 1
 
         metadata_path = os.path.join(self.output_dir, "metadata.json")
         self.save_metadata(metadata, metadata_path)
