@@ -90,15 +90,20 @@ def perturb_edges(graph: nx.Graph,
 class RemoveNodesPerturbation(Perturbation):
     """Remove nodes from a graph using a configurable strategy."""
 
+    folder_name = "remove_nodes"
+
     def __init__(self, num_nodes: int, strategy: str = 'random',
                  params: Optional[Dict] = None,
                  rng: Optional[random.Random] = None,
-                 node_list: Optional[List[int]] = None):
+                 node_list: Optional[List[int]] = None,
+                 folder_name: Optional[str] = None):
         self.num_nodes = num_nodes
         self.strategy = strategy
         self.params = params
         self.rng = rng
         self.node_list = node_list
+        if folder_name is not None:
+            self.folder_name = folder_name
 
     def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph, removed = remove_nodes(
@@ -122,10 +127,15 @@ class RemoveNodesPerturbation(Perturbation):
 class RemoveEdgesPerturbation(Perturbation):
     """Remove edges from a graph with a given probability."""
 
+    folder_name = "remove_edges"
+
     def __init__(self, p_remove: float = 0.1,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None,
+                 folder_name: Optional[str] = None):
         self.p_remove = p_remove
         self.rng = rng
+        if folder_name is not None:
+            self.folder_name = folder_name
 
     def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(graph, p_remove=self.p_remove, rng=self.rng)
@@ -140,11 +150,16 @@ class RemoveEdgesPerturbation(Perturbation):
 class AddEdgesPerturbation(Perturbation):
     """Add random edges to a graph."""
 
+    folder_name = "add_edges"
+
     def __init__(self, p_add: float = 0.0, add_num: Optional[int] = None,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None,
+                 folder_name: Optional[str] = None):
         self.p_add = p_add
         self.add_num = add_num
         self.rng = rng
+        if folder_name is not None:
+            self.folder_name = folder_name
 
     def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(
@@ -158,13 +173,18 @@ class AddEdgesPerturbation(Perturbation):
 class EdgePerturbation(Perturbation):
     """Combined edge perturbation: remove and add edges simultaneously."""
 
+    folder_name = "edge_perturbation"
+
     def __init__(self, p_remove: float = 0.0, p_add: float = 0.0,
                  add_num: Optional[int] = None,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None,
+                 folder_name: Optional[str] = None):
         self.p_remove = p_remove
         self.p_add = p_add
         self.add_num = add_num
         self.rng = rng
+        if folder_name is not None:
+            self.folder_name = folder_name
 
     def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(

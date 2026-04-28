@@ -80,6 +80,7 @@ class PerturbationPipeline:
             - 'changed_nodes': {node: (old_label, new_label)} for nodes whose label changed
             - 'labeling_result': full LabelingResult for the perturbed graph
             - 'original_labeling_result': full LabelingResult for the original graph
+            - 'perturbation_folder': folder_name of the perturbation that produced this variant
         """
         original_result = self._compute_labels(graph)
         original_labels = original_result.labels
@@ -112,6 +113,7 @@ class PerturbationPipeline:
                         "changed_nodes": changed_nodes,
                         "labeling_result": candidate_result,
                         "original_labeling_result": original_result,
+                        "perturbation_folder": perturbation.folder_name,
                     })
 
         return results

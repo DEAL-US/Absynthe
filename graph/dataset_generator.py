@@ -54,8 +54,20 @@ class GraphDatasetGenerator:
         self.max_perturbation_iterations = max_perturbation_iterations
 
         os.makedirs(self.output_dir, exist_ok=True)
-        self.graph_dir = os.path.join(self.output_dir, "graphs")
-        os.makedirs(self.graph_dir, exist_ok=True)
+        self.originals_dir = os.path.join(self.output_dir, "originals")
+        os.makedirs(self.originals_dir, exist_ok=True)
+
+        self._perturbation_dirs: Dict[str, str] = {}
+        for perturbation, _ in self.perturbations:
+            folder = perturbation.folder_name
+            if folder in self._perturbation_dirs:
+                raise ValueError(
+                    f"Duplicate perturbation folder_name '{folder}': "
+                    "use distinct names per perturbation instance."
+                )
+            pert_dir = os.path.join(self.output_dir, folder)
+            os.makedirs(pert_dir, exist_ok=True)
+            self._perturbation_dirs[folder] = pert_dir
 
     def _compute_and_store_labels(self, graph: nx.Graph, attribute_name: str) -> LabelingResult:
         """Compute labels using all labeling functions and store them as node/graph attributes.
@@ -95,9 +107,12 @@ class GraphDatasetGenerator:
            independent perturbed variant
         4. For each variant, compute observed labels and save it
 
-        The base (unperturbed) graph is NOT written to disk. Instead, each
-        variant's metadata entry carries a reversible ``perturbation_info.changes``
-        dict — see ``graph.reconstruction.reconstruct_original``.
+        The base (unperturbed) graph is written to ``originals/graph_<i>.graphml``
+        for every base graph. Each perturbed variant is written to a per-perturbation
+        subfolder named after the perturbation's ``folder_name``. Each variant's
+        metadata entry references the original via ``original_graph_path`` and
+        carries a reversible ``perturbation_info.changes`` dict — see
+        ``graph.reconstruction.reconstruct_original``.
 
         Args:
             num_graphs: Number of base graphs to generate.
@@ -140,6 +155,9 @@ class GraphDatasetGenerator:
                         for inst in instances
                     ]
 
+            original_path = os.path.join(self.originals_dir, f"graph_{i}.graphml")
+            self.save_graph(graph, original_path)
+
             if not (self.perturbations and self.labeling_functions):
                 continue
 
@@ -154,14 +172,18 @@ class GraphDatasetGenerator:
                 perturbed = result["perturbed_graph"]
                 self._compute_and_store_labels(perturbed, 'observed_ground_truth')
 
+                pert_folder = result["perturbation_folder"]
+                pert_dir = self._perturbation_dirs[pert_folder]
                 variant_path = os.path.join(
-                    self.graph_dir, f"graph_{graph_counter}.graphml"
+                    pert_dir, f"graph_{graph_counter}.graphml"
                 )
                 self.save_graph(perturbed, variant_path)
                 entry: Dict[str, Any] = {
                     "graph_id": graph_counter,
                     "base_graph_id": i,
                     "graph_path": variant_path,
+                    "original_graph_path": original_path,
+                    "perturbation_name": pert_folder,
                     "perturbation_info": {
                         "changes": result["changes"],
                         "changed_nodes": result["changed_nodes"],

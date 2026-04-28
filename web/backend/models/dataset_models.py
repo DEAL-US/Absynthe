@@ -49,6 +49,9 @@ class DatasetGraphRecord(BaseModel):
     graph_id: int
     graph_path: str
     perturbation_info: Optional[Dict[str, Any]]
+    base_graph_id: Optional[int] = None
+    original_graph_path: Optional[str] = None
+    perturbation_name: Optional[str] = None
 
 
 class DatasetListItem(BaseModel):
