@@ -17,6 +17,8 @@ import { DistributionInput } from '@/components/ui/DistributionInput'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { useGraphState } from '@/hooks/useGraphState'
 
+const SUPPORTED_GRAPH_EXTS = ['.graphml', '.rdf', '.ttl', '.nt', '.n3', '.owl'] as const
+
 export function GraphBuilderPage() {
   const navigate = useNavigate()
   const { setGraph, setUploadedGraph, elements, graphId, graphSource, uploadFileCount } = useGraphState()
@@ -136,13 +138,15 @@ export function GraphBuilderPage() {
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
-    const graphmlFiles = Array.from(files).filter((f) => f.name.toLowerCase().endsWith('.graphml'))
-    if (graphmlFiles.length < files.length) {
-      setError('Some files were skipped because they are not .graphml files.')
+    const supportedFiles = Array.from(files).filter((f) =>
+      SUPPORTED_GRAPH_EXTS.some((ext) => f.name.toLowerCase().endsWith(ext)),
+    )
+    if (supportedFiles.length < files.length) {
+      setError(`Some files were skipped because they are not supported graph files (${SUPPORTED_GRAPH_EXTS.join(', ')}).`)
     } else {
       setError(null)
     }
-    setSelectedFiles((prev) => [...prev, ...graphmlFiles])
+    setSelectedFiles((prev) => [...prev, ...supportedFiles])
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -305,10 +309,10 @@ export function GraphBuilderPage() {
             </div>
           </TabsContent>
 
-          {/* ── Tab: Upload GraphML ── */}
+          {/* ── Tab: Upload graph files (GraphML / RDF) ── */}
           <TabsContent value="upload">
             <div className="flex flex-col gap-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">GraphML Files</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Graph Files</p>
 
               {/* Drop zone / file input */}
               <button
@@ -317,12 +321,12 @@ export function GraphBuilderPage() {
                 className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-white/15 hover:border-brand-500/40 bg-white/5 hover:bg-brand-500/5 p-6 transition-colors cursor-pointer"
               >
                 <Upload className="w-6 h-6 text-gray-500" />
-                <span className="text-xs text-gray-400">Click to select .graphml files</span>
+                <span className="text-xs text-gray-400">Click to select graph files ({SUPPORTED_GRAPH_EXTS.join(', ')})</span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".graphml"
+                accept={SUPPORTED_GRAPH_EXTS.join(',')}
                 multiple
                 className="hidden"
                 onChange={handleFilesSelected}

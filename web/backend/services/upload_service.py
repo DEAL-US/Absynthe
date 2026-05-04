@@ -1,4 +1,4 @@
-"""Service for uploading and validating GraphML files."""
+"""Service for uploading and validating graph files (GraphML / RDF)."""
 import web.backend.services  # noqa: F401 - side-effect import
 
 import os
@@ -8,9 +8,9 @@ import threading
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 
-import networkx as nx
 from fastapi import UploadFile
 
+from graph.folder_graph_generator import SUPPORTED_EXTENSIONS, load_graph_file
 from web.backend.models.graph_models import GraphStats
 from web.backend.services import graph_store, serialization
 
@@ -21,7 +21,7 @@ _lock = threading.Lock()
 def upload(
     files: List[UploadFile],
 ) -> Tuple[str, list, GraphStats, int, Optional[str], list]:
-    """Validate, save, and load uploaded GraphML files.
+    """Validate, save, and load uploaded graph files (GraphML / RDF).
 
     Returns (graph_id, elements, stats, file_count, folder_path, warnings).
     """
@@ -36,8 +36,11 @@ def upload(
         for f in files:
             filename = f.filename or "unknown"
 
-            if not filename.lower().endswith(".graphml"):
-                warnings.append({"filename": filename, "error": "File must have a .graphml extension."})
+            if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+                warnings.append({
+                    "filename": filename,
+                    "error": f"File must have one of these extensions: {', '.join(SUPPORTED_EXTENSIONS)}.",
+                })
                 continue
 
             dest = os.path.join(temp_dir, filename)
@@ -47,22 +50,20 @@ def upload(
 
             # Validate by parsing
             try:
-                nx.read_graphml(dest)
+                load_graph_file(dest)
                 valid_paths.append(dest)
             except Exception as exc:
-                warnings.append({"filename": filename, "error": f"Invalid GraphML: {exc}"})
+                warnings.append({"filename": filename, "error": f"Invalid graph file: {exc}"})
                 os.remove(dest)
 
         if not valid_paths:
             error_details = "; ".join(f"{w['filename']}: {w['error']}" for w in warnings)
-            raise ValueError(f"No valid GraphML files uploaded. {error_details}")
+            raise ValueError(f"No valid graph files uploaded. {error_details}")
 
         # Load first graph (alphabetical order) for preview
         valid_paths.sort(key=lambda p: os.path.basename(p))
         first_path = valid_paths[0]
-        graph = nx.read_graphml(first_path)
-        if isinstance(graph, nx.DiGraph):
-            graph = nx.Graph(graph)
+        graph = load_graph_file(first_path)
 
         # Compute stats (same pattern as graph_service.py)
         motif_counts: dict = defaultdict(int)
