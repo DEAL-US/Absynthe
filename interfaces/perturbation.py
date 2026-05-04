@@ -1,6 +1,8 @@
 import abc
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 import networkx as nx
+
+from .perturbation_hint import PerturbationHint
 
 
 class Perturbation(abc.ABC):
@@ -16,7 +18,9 @@ class Perturbation(abc.ABC):
     """
 
     @abc.abstractmethod
-    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+    def apply(self, graph: nx.Graph,
+              hint: Optional[PerturbationHint] = None
+              ) -> Tuple[nx.Graph, Dict[str, Any]]:
         """Apply this perturbation to a graph.
 
         The implementation must NOT mutate the input graph. It should work
@@ -24,6 +28,11 @@ class Perturbation(abc.ABC):
 
         Args:
             graph: The input graph to perturb.
+            hint: Optional ``PerturbationHint`` produced by a labeling
+                function, signaling which nodes/edges form the zone where
+                the perturbation should focus. Concrete implementations
+                decide how to interpret it; when ``None`` or empty they
+                must operate over the whole graph.
 
         Returns:
             A tuple of (perturbed_graph, changes_dict) where changes_dict

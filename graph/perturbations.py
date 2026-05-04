@@ -1,9 +1,25 @@
 import random
 from typing import Optional, Dict, Any, Tuple, List
 import networkx as nx
-from interfaces import Perturbation
+from interfaces import Perturbation, PerturbationHint
 from .perturbation_strategies import STRATEGY_MAP
 from utils.rng import get_rng
+
+
+# ---------------------------------------------------------------------------
+# Hint helpers
+# ---------------------------------------------------------------------------
+
+def _edge_in_zone(u: int, v: int, hint: Optional[PerturbationHint]) -> bool:
+    """An edge belongs to the hint zone if at least one endpoint is in
+    ``hint.nodes`` or the edge itself is in ``hint.edges``. With no hint
+    (or an empty one) every edge qualifies.
+    """
+    if hint is None or hint.is_empty():
+        return True
+    if u in hint.nodes or v in hint.nodes:
+        return True
+    return PerturbationHint.normalize_edge(u, v) in hint.edges
 
 
 # ---------------------------------------------------------------------------
@@ -15,7 +31,7 @@ def remove_nodes(graph: nx.Graph,
                  strategy: str = 'motif',
                  params: Optional[Dict] = None,
                  rng: Optional[random.Random] = None,
-                 node_list: Optional[List[int]] = None) -> Tuple[nx.Graph, List[int]]:
+                 hint: Optional[PerturbationHint] = None) -> Tuple[nx.Graph, List[int]]:
     """Remove n nodes according to the requested strategy and return (new_graph, removed_nodes).
 
     Args:
@@ -24,7 +40,8 @@ def remove_nodes(graph: nx.Graph,
         strategy: Strategy for selecting nodes to remove.
         params: Additional parameters for the strategy.
         rng: Random number generator.
-        node_list: Subset of nodes to consider for removal.
+        hint: Optional perturbation hint. When provided and non-empty, the
+            candidate pool is restricted to ``hint.nodes``.
 
     Returns:
         Tuple of (perturbed_graph, list_of_removed_nodes).
@@ -33,7 +50,10 @@ def remove_nodes(graph: nx.Graph,
     rng = rng or get_rng()
 
     G = graph.copy()
-    nodes = node_list if node_list is not None else list(G.nodes())
+    if hint is not None and hint.nodes:
+        nodes = [u for u in G.nodes() if u in hint.nodes]
+    else:
+        nodes = list(G.nodes())
     n = min(n, len(nodes))
 
     if n == 0:
@@ -52,7 +72,8 @@ def perturb_edges(graph: nx.Graph,
                   p_remove: float = 0.0,
                   p_add: float = 0.0,
                   add_num: Optional[int] = None,
-                  rng: Optional[random.Random] = None) -> nx.Graph:
+                  rng: Optional[random.Random] = None,
+                  hint: Optional[PerturbationHint] = None) -> nx.Graph:
     """Perturb edges by removing existing edges and/or adding new ones.
 
     Args:
@@ -61,16 +82,21 @@ def perturb_edges(graph: nx.Graph,
         p_add: Probability for each non-edge to be added (used if add_num is None).
         add_num: Explicit number of edges to add (if provided, p_add is ignored).
         rng: Random number generator.
+        hint: Optional perturbation hint. When provided and non-empty, only
+            edges/non-edges with at least one endpoint in ``hint.nodes``
+            (or an existing edge listed in ``hint.edges``) are considered.
     """
     rng = rng or get_rng()
     G = graph.copy()
 
     if p_remove > 0:
         for u, v in list(G.edges()):
+            if not _edge_in_zone(u, v, hint):
+                continue
             if rng.random() < p_remove:
                 G.remove_edge(u, v)
 
-    non_edges = list(nx.non_edges(G))
+    non_edges = [(u, v) for u, v in nx.non_edges(G) if _edge_in_zone(u, v, hint)]
     if add_num is not None:
         add_num = min(add_num, len(non_edges))
         additions = rng.sample(non_edges, add_num) if add_num > 0 else []
@@ -95,20 +121,20 @@ class RemoveNodesPerturbation(Perturbation):
     def __init__(self, num_nodes: int, strategy: str = 'random',
                  params: Optional[Dict] = None,
                  rng: Optional[random.Random] = None,
-                 node_list: Optional[List[int]] = None,
                  folder_name: Optional[str] = None):
         self.num_nodes = num_nodes
         self.strategy = strategy
         self.params = params
         self.rng = rng
-        self.node_list = node_list
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+    def apply(self, graph: nx.Graph,
+              hint: Optional[PerturbationHint] = None
+              ) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph, removed = remove_nodes(
             graph, self.num_nodes, self.strategy,
-            self.params, self.rng, self.node_list
+            self.params, self.rng, hint
         )
         removed_info = []
         for n in removed:
@@ -137,8 +163,12 @@ class RemoveEdgesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
-        new_graph = perturb_edges(graph, p_remove=self.p_remove, rng=self.rng)
+    def apply(self, graph: nx.Graph,
+              hint: Optional[PerturbationHint] = None
+              ) -> Tuple[nx.Graph, Dict[str, Any]]:
+        new_graph = perturb_edges(
+            graph, p_remove=self.p_remove, rng=self.rng, hint=hint
+        )
         removed = set(graph.edges()) - set(new_graph.edges())
         removed_info = [
             {"u": u, "v": v, "attrs": dict(graph.edges[u, v])}
@@ -161,9 +191,12 @@ class AddEdgesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+    def apply(self, graph: nx.Graph,
+              hint: Optional[PerturbationHint] = None
+              ) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(
-            graph, p_add=self.p_add, add_num=self.add_num, rng=self.rng
+            graph, p_add=self.p_add, add_num=self.add_num,
+            rng=self.rng, hint=hint,
         )
         added = set(new_graph.edges()) - set(graph.edges())
         added_info = [{"u": u, "v": v} for u, v in added]
@@ -186,10 +219,12 @@ class EdgePerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph) -> Tuple[nx.Graph, Dict[str, Any]]:
+    def apply(self, graph: nx.Graph,
+              hint: Optional[PerturbationHint] = None
+              ) -> Tuple[nx.Graph, Dict[str, Any]]:
         new_graph = perturb_edges(
             graph, p_remove=self.p_remove, p_add=self.p_add,
-            add_num=self.add_num, rng=self.rng
+            add_num=self.add_num, rng=self.rng, hint=hint,
         )
         before_edges = set(graph.edges())
         after_edges = set(new_graph.edges())

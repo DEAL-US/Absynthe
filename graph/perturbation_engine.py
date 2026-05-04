@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Any
 
 import networkx as nx
 
-from interfaces import Perturbation, LabelingFunction
+from interfaces import Perturbation, LabelingFunction, PerturbationHint
 from interfaces.labeling_result import LabelingResult
 
 
@@ -46,7 +46,11 @@ class PerturbationPipeline:
         """Compute labels using all labeling functions.
 
         Later labeling functions overwrite earlier ones for the same node.
-        Graph labels and metadata are merged across all functions.
+        Graph labels and metadata are merged across all functions. The
+        perturbation hint is merged across functions; if no labeling
+        function provides one, it is derived from ``details`` so that
+        legacy labelers (which only fill ``motif_nodes`` / ``motif_edges``
+        per node) still produce a usable hint for downstream perturbations.
         """
         merged = LabelingResult(labels={})
         for lf in self.labeling_functions:
@@ -56,7 +60,37 @@ class PerturbationPipeline:
             for node, det in result.details.items():
                 merged.details.setdefault(node, {}).update(det)
             merged.metadata.update(result.metadata)
+            if result.hint is not None and not result.hint.is_empty():
+                merged.hint = (
+                    result.hint if merged.hint is None
+                    else merged.hint.merge(result.hint)
+                )
+
+        if merged.hint is None or merged.hint.is_empty():
+            derived = self._derive_hint_from_details(merged.details)
+            merged.hint = derived if not derived.is_empty() else None
         return merged
+
+    @staticmethod
+    def _derive_hint_from_details(
+        details: Dict[int, Dict[str, Any]]
+    ) -> PerturbationHint:
+        """Derive a PerturbationHint from per-node ``details``.
+
+        Looks for ``motif_nodes`` and ``motif_edges`` entries and
+        accumulates them, normalizing edges to ``(min, max)``.
+        """
+        hint = PerturbationHint()
+        for det in details.values():
+            motif_nodes = det.get("motif_nodes")
+            if motif_nodes:
+                hint.nodes.update(motif_nodes)
+            motif_edges = det.get("motif_edges")
+            if motif_edges:
+                for edge in motif_edges:
+                    u, v = edge[0], edge[1]
+                    hint.edges.add(PerturbationHint.normalize_edge(u, v))
+        return hint
 
     def apply_and_check(self, graph: nx.Graph) -> List[Dict[str, Any]]:
         """Apply perturbations to the original graph, only accepting those that change labels.
@@ -94,7 +128,9 @@ class PerturbationPipeline:
                 attempts += 1
 
                 # Always apply to the original graph
-                candidate_graph, changes = perturbation.apply(graph)
+                candidate_graph, changes = perturbation.apply(
+                    graph, hint=original_result.hint
+                )
 
                 # Check for label changes
                 candidate_result = self._compute_labels(candidate_graph)
