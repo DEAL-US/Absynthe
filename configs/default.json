@@ -1,0 +1,101 @@
+{
+  "seed": 42,
+  "clean_output": true,
+  "datasets_root": "datasets",
+  "shared": {
+    "num_graphs": 300,
+    "max_perturbation_iterations": 15,
+    "composition": "sequential",
+    "composition_params": {},
+    "num_extra_vertices": 2,
+    "num_extra_edges": 0,
+    "perturbations": [
+      {
+        "type": "remove_nodes",
+        "count": 1,
+        "folder_name": "remove_nodes",
+        "params": { "num_nodes": 1, "strategy": "motif" }
+      },
+      {
+        "type": "edge_perturbation",
+        "count": 1,
+        "folder_name": "edge_perturbation",
+        "params": { "p_remove": 0.1, "p_add": 0.05 }
+      },
+      {
+        "type": "remove_edges",
+        "count": 1,
+        "folder_name": "remove_edges",
+        "params": { "p_remove": 0.15 }
+      }
+    ]
+  },
+  "datasets": [
+    {
+      "name": "house",
+      "motifs": [
+        {
+          "type": "house",
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["house"] } }
+      ]
+    },
+    {
+      "name": "cycle_5",
+      "motifs": [
+        {
+          "type": "cycle",
+          "params": [5],
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["cycle_5"] } }
+      ]
+    },
+    {
+      "name": "star_5",
+      "motifs": [
+        {
+          "type": "star",
+          "params": [5],
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 3, "std": 1 } }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["star_5"] } }
+      ]
+    },
+    {
+      "name": "house_cycle5_star5",
+      "motifs": [
+        {
+          "type": "house",
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+        },
+        {
+          "type": "cycle",
+          "params": [5],
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+        },
+        {
+          "type": "star",
+          "params": [5],
+          "count": 1,
+          "count_distribution": { "type": "normal", "params": { "mean": 2, "std": 1 } }
+        }
+      ],
+      "labeling_functions": [
+        { "type": "motif_labeling", "params": { "motif_order": ["house", "cycle_5", "star_5"] } }
+      ]
+    }
+  ]
+}

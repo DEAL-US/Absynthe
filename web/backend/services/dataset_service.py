@@ -6,11 +6,10 @@ import threading
 import uuid
 from typing import Dict, Optional
 
-from graph.composite_graph_generator import MotifComposite
 from graph.dataset_generator import GraphDatasetGenerator
-from graph.folder_graph_generator import FolderGraphGenerator, IterationOrder, ExhaustionPolicy
 from web.backend.models.dataset_models import DatasetGenerateRequest, TaskStatus
 from web.backend.services.registry import (
+    build_graph_generator,
     build_labeling_functions,
     build_perturbations,
     normalize_composition_params,
@@ -66,32 +65,7 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
     try:
         output_dir = os.path.abspath(request.output_dir)
 
-        if request.folder_source:
-            graph_generator = FolderGraphGenerator(
-                folder_path=request.folder_source.folder_path,
-                iteration_order=IterationOrder(request.folder_source.iteration_order),
-                exhaustion_policy=ExhaustionPolicy(request.folder_source.exhaustion_policy),
-            )
-        elif any(m.count_distribution for m in request.motifs):
-            from graph.random_motif_composite import RandomMotifComposite
-            from utils.distributions import IntDistribution
-
-            motif_configs = [
-                (
-                    m.to_list(),
-                    m.count,
-                    IntDistribution(type=m.count_distribution.type, params=dict(m.count_distribution.params))
-                    if m.count_distribution
-                    else None,
-                )
-                for m in request.motifs
-            ]
-            graph_generator = RandomMotifComposite(motif_configs=motif_configs)
-        else:
-            motif_lists = []
-            for m in request.motifs:
-                motif_lists.extend([m.to_list()] * m.count)
-            graph_generator = MotifComposite(motifs=motif_lists)
+        graph_generator = build_graph_generator(request)
         labeling_functions = build_labeling_functions(request.labeling_functions)
         perturbations = build_perturbations(request.perturbations)
 

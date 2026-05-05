@@ -273,6 +273,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
 
     cfg_type = (config.type or "").lower()
     params = config.params or {}
+    folder_name = config.folder_name
 
     if cfg_type == "remove_nodes":
         strategy = str(params.get("strategy", "random"))
@@ -295,11 +296,13 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             num_nodes=num_nodes,
             strategy=strategy,
             params=strategy_params or None,
+            folder_name=folder_name,
         )
 
     if cfg_type == "remove_edges":
         return RemoveEdgesPerturbation(
-            p_remove=_to_float(params.get("p_remove"), 0.1)
+            p_remove=_to_float(params.get("p_remove"), 0.1),
+            folder_name=folder_name,
         )
 
     if cfg_type == "add_edges":
@@ -307,6 +310,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
         return AddEdgesPerturbation(
             p_add=_to_float(params.get("p_add"), 0.05),
             add_num=add_num if add_num > 0 else None,
+            folder_name=folder_name,
         )
 
     if cfg_type == "edge_perturbation":
@@ -315,6 +319,7 @@ def build_perturbation(config: PerturbationConfig) -> Perturbation:
             p_remove=_to_float(params.get("p_remove"), 0.1),
             p_add=_to_float(params.get("p_add"), 0.05),
             add_num=add_num if add_num > 0 else None,
+            folder_name=folder_name,
         )
 
     raise ValueError(f"Unknown perturbation type: {config.type}")
@@ -326,3 +331,48 @@ def build_perturbations(
     if not configs:
         return []
     return [(build_perturbation(cfg), cfg.count) for cfg in configs]
+
+
+def build_graph_generator(request: "DatasetGenerateRequest"):
+    """Build the graph generator (folder, random-motif, or fixed-motif) from a request.
+
+    Mirrors the dispatch already used in dataset_service.run_generation so the same
+    logic is shared between the web service and the CLI loader.
+    """
+    from graph.composite_graph_generator import MotifComposite
+    from graph.folder_graph_generator import (
+        FolderGraphGenerator,
+        IterationOrder,
+        ExhaustionPolicy,
+    )
+
+    if request.folder_source:
+        return FolderGraphGenerator(
+            folder_path=request.folder_source.folder_path,
+            iteration_order=IterationOrder(request.folder_source.iteration_order),
+            exhaustion_policy=ExhaustionPolicy(request.folder_source.exhaustion_policy),
+        )
+
+    if any(m.count_distribution for m in request.motifs):
+        from graph.random_motif_composite import RandomMotifComposite
+        from utils.distributions import IntDistribution
+
+        motif_configs = [
+            (
+                m.to_list(),
+                m.count,
+                IntDistribution(
+                    type=m.count_distribution.type,
+                    params=dict(m.count_distribution.params),
+                )
+                if m.count_distribution
+                else None,
+            )
+            for m in request.motifs
+        ]
+        return RandomMotifComposite(motif_configs=motif_configs)
+
+    motif_lists = []
+    for m in request.motifs:
+        motif_lists.extend([m.to_list()] * m.count)
+    return MotifComposite(motifs=motif_lists)

@@ -11,6 +11,7 @@ class PerturbationConfig(BaseModel):
     type: str
     params: Dict[str, Any] = Field(default_factory=dict)
     count: int = Field(1, ge=1)
+    folder_name: Optional[str] = None
 
 
 class PerturbationRequest(BaseModel):
