@@ -1,16 +1,23 @@
-# CAISE - Graph and Motif Composition Generator
+# Absynthe — Synthetic Graph Dataset Framework
 
-Python project for generating and manipulating graphs using motifs and composition engines.
+Absynthe is a Python framework for generating synthetic graphs out of configurable **motifs**, composing them with several **composition patterns**, **labeling** the result via subgraph isomorphism, applying **reversible perturbations**, and producing reproducible **datasets** for graph-learning experiments. It can also build datasets from **existing graph collections** by ingesting graphs from a folder (GraphML or RDF).
 
-## Overview
-- Reusable graph and motif generators.
-- Composition and perturbation engines to test structural properties.
+## Features
+- Reusable motif generators — cycle, house, chain, star, gate (see [motifs/](motifs/) and the registry in [motifs/__init__.py](motifs/__init__.py)).
+- Composition patterns — sequential, ER, BA, SBM, star, hierarchical — via [graph/composition_engine.py](graph/composition_engine.py).
+- Random per-graph motif counts using `IntDistribution` (uniform / normal / poisson) in [utils/distributions.py](utils/distributions.py).
+- Subgraph-isomorphism-based labeling with per-node, per-graph and per-motif labels in [graph/labeling_functions.py](graph/labeling_functions.py).
+- Reversible perturbations — node removal with six strategies (random, degree, motif, core, periphery, centrality), edge removal, edge rewiring — in [graph/perturbations.py](graph/perturbations.py) and [graph/perturbation_strategies.py](graph/perturbation_strategies.py), plus reconstruction in [graph/reconstruction.py](graph/reconstruction.py).
+- Folder / RDF graph ingestion via [graph/folder_graph_generator.py](graph/folder_graph_generator.py) — supports `.graphml`, `.rdf`, `.ttl`, `.nt`, `.n3`, `.owl`.
+- Optional FastAPI + React web interface for interactive exploration (see [web/](web/)).
 
 ## Requirements
-- Python 3.8 or newer
+- Python 3.8 or newer.
 - A virtual environment is recommended (example below).
+- Core dependencies are listed in [requirements.txt](requirements.txt) (`networkx`, `matplotlib`, `lxml`, `rdflib`).
+- Web-interface dependencies are listed in [requirements-web.txt](requirements-web.txt).
 
-This repository includes a `requirements.txt` with the minimal dependencies used by the examples (`networkx`, `numpy`, `matplotlib`). Install them into your venv with:
+## Installation
 
 ```powershell
 # Windows (PowerShell)
@@ -28,26 +35,41 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Running Examples
-After activating the venv and installing `requirements.txt`, run the example runner or tests:
+## Quick start — generating a dataset
 
-```powershell
-# run example
-python .\test_graph.py
+The canonical end-to-end driver is [gen_dataset.py](gen_dataset.py). After activating the venv and installing `requirements.txt`:
 
+```bash
+python gen_dataset.py
 ```
 
-Note: the framework now uses a single global seed defined in `test_graph.py` (variable `SEED`) to control all randomness. Change that value to reproduce different random instances.
+This produces four bundled datasets under `datasets/`:
 
-## Project Structure
-- `graph/`: generators and composition/perturbation engines.
-- `motifs/`: motif generators.
-- `utils/`: helper utilities such as `graph_utils.py`.
-- Root scripts: `graph_generator.py`, `motif_generator.py`, `label_assigner.py`, `node_remover.py`, plus tests.
-- `web/`: (optional) web interface for interactive graph generation.
+- `datasets/house/`
+- `datasets/cycle_5/`
+- `datasets/star_5/`
+- `datasets/house_cycle5_star5/`
 
-## Web interface deployment
-### Development (two terminals):
+Each dataset contains the perturbed graph variants (organized by perturbation type) along with metadata describing the motifs, labels and the reversible perturbation hints.
+
+Reproducibility is controlled by a single global seed set through `utils.rng.set_seed(...)` (see [utils/rng.py](utils/rng.py)) at the top of [gen_dataset.py](gen_dataset.py). Change that value to obtain different random instances.
+
+For shorter, narrative examples that walk through individual building blocks (single-graph composition, distributions, composition patterns), see [test_graph.py](test_graph.py) and [prueba.py](prueba.py).
+
+For the full API walkthrough — motif tables, composition parameters, custom labelers and custom motifs — see the companion guide [Absynthe_GUIDE.md](Absynthe_GUIDE.md).
+
+## Project structure
+- [graph/](graph/) — composite generators, composition engine, dataset orchestrator, labeling functions, perturbations and strategies, reconstruction, folder/RDF loader.
+- [motifs/](motifs/) — built-in motif generators and the registry in [motifs/__init__.py](motifs/__init__.py).
+- [interfaces/](interfaces/) — abstract base classes (`GraphGenerator`, `MotifGenerator`, `LabelingFunction`, `Perturbation`) and data models (`LabelingResult`, `PerturbationHint`).
+- [utils/](utils/) — global RNG ([utils/rng.py](utils/rng.py)), `IntDistribution` ([utils/distributions.py](utils/distributions.py)), graph helpers.
+- [web/](web/) — FastAPI backend + React/TypeScript frontend.
+- Root scripts: [gen_dataset.py](gen_dataset.py), [test_graph.py](test_graph.py), [prueba.py](prueba.py), [test_dataset.py](test_dataset.py), [test_reconstruction.py](test_reconstruction.py), [visualize.py](visualize.py), [visualize_graph_dataset.py](visualize_graph_dataset.py).
+- Companion docs: [Absynthe_GUIDE.md](Absynthe_GUIDE.md).
+
+## Web interface
+
+### Development (two terminals)
 **Terminal 1 — backend (from project root):**
 ```bash
 pip install -r requirements-web.txt
@@ -61,17 +83,20 @@ npm install
 npm run dev          # → http://localhost:5173
 ```
 
-### Production (single command):
+### Production (single command)
 ```bash
 pip install -r requirements-web.txt
-python -m web        # builds frontend then serves everything at :8000
+python -m web        # builds the frontend (if needed) and serves the SPA + API at :8000
 ```
 
-### Docker:
+The `python -m web` entry point is implemented in [web/__main__.py](web/__main__.py) and accepts `--host`, `--port`, `--reload` and `--build` flags.
+
+### Docker
 ```bash
 docker compose up    # → http://localhost:8000
 ```
 
+See [docker-compose.yml](docker-compose.yml) and [Dockerfile](Dockerfile) for the build configuration.
+
 ## License
-This repository is licensed under the GNU General Public License v3.0 (GPL-3.0).
-See the `GPL-3.0 license` file in the project root for the full text.
+This repository is licensed under the GNU General Public License v3.0 (GPL-3.0). See the [GPL-3.0 license](GPL-3.0%20license) file in the project root for the full text.
