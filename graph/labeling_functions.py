@@ -26,7 +26,7 @@ class MotifLabelingFunction(LabelingFunction):
         """
         self.motif_order = motif_order
 
-    def compute_labels(self, graph: nx.Graph) -> LabelingResult:
+    def label(self, graph: nx.Graph) -> LabelingResult:
         """Compute motif-based labels for all nodes in the graph.
 
         Iterates through motif types in reverse order so that earlier motifs
@@ -65,7 +65,7 @@ class MotifLabelingFunction(LabelingFunction):
                     node_labels[node] = work_graph.nodes[node].get('label', 'unknown')
 
         return LabelingResult(
-            labels=node_labels,
+            node_labels=node_labels,
             graph_labels={},
             details=details,
             metadata={"instances": all_instances} if all_instances else {},

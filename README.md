@@ -6,7 +6,7 @@ Absynthe is a Python framework for generating synthetic graphs out of configurab
 - Reusable motif generators — cycle, house, chain, star, gate (see [motifs/](motifs/) and the registry in [motifs/__init__.py](motifs/__init__.py)).
 - Composition patterns — sequential, ER, BA, SBM, star, hierarchical — via [graph/composition_engine.py](graph/composition_engine.py).
 - Random per-graph motif counts using `IntDistribution` (uniform / normal / poisson) in [utils/distributions.py](utils/distributions.py).
-- Subgraph-isomorphism-based labeling with per-node, per-graph and per-motif labels in [graph/labeling_functions.py](graph/labeling_functions.py).
+- Flexible labeling: per-node, per-edge, per-graph, or custom combinations via pluggable `LabelingFunction` in [graph/labeling_functions.py](graph/labeling_functions.py) and [interfaces/labeling_function.py](interfaces/labeling_function.py).
 - Reversible perturbations — node removal with six strategies (random, degree, motif, core, periphery, centrality), edge removal, edge rewiring — in [graph/perturbations.py](graph/perturbations.py) and [graph/perturbation_strategies.py](graph/perturbation_strategies.py), plus reconstruction in [graph/reconstruction.py](graph/reconstruction.py).
 - Folder / RDF graph ingestion via [graph/folder_graph_generator.py](graph/folder_graph_generator.py) — supports `.graphml`, `.rdf`, `.ttl`, `.nt`, `.n3`, `.owl`.
 - Optional FastAPI + React web interface for interactive exploration (see [web/](web/)).

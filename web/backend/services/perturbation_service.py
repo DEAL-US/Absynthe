@@ -19,8 +19,8 @@ from web.backend.services.registry import build_labeling_functions, build_pertur
 def _apply_observed_labels(graph, labelers: List[LabelingFunction]) -> None:
     """Compute and store observed labels on the perturbed graph."""
     for labeler in labelers:
-        result = labeler.compute_labels(graph)
-        for node, label in result.labels.items():
+        result = labeler.label(graph)
+        for node, label in result.node_labels.items():
             if node in graph:
                 graph.nodes[node]["observed_ground_truth"] = label
                 graph.nodes[node]["label"] = label

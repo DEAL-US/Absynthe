@@ -46,16 +46,17 @@ class PerturbationPipeline:
         """Compute labels using all labeling functions.
 
         Later labeling functions overwrite earlier ones for the same node.
-        Graph labels and metadata are merged across all functions. The
+        Edge labels, graph labels and metadata are merged across all functions. The
         perturbation hint is merged across functions; if no labeling
         function provides one, it is derived from ``details`` so that
         legacy labelers (which only fill ``motif_nodes`` / ``motif_edges``
         per node) still produce a usable hint for downstream perturbations.
         """
-        merged = LabelingResult(labels={})
+        merged = LabelingResult(node_labels={})
         for lf in self.labeling_functions:
-            result = lf.compute_labels(graph)
-            merged.labels.update(result.labels)
+            result = lf.label(graph)
+            merged.node_labels.update(result.node_labels)
+            merged.edge_labels.update(result.edge_labels)
             merged.graph_labels.update(result.graph_labels)
             for node, det in result.details.items():
                 merged.details.setdefault(node, {}).update(det)
@@ -117,7 +118,7 @@ class PerturbationPipeline:
             - 'perturbation_folder': folder_name of the perturbation that produced this variant
         """
         original_result = self._compute_labels(graph)
-        original_labels = original_result.labels
+        original_labels = original_result.node_labels
         results = []
 
         for perturbation, desired_count in self.perturbations:
@@ -134,7 +135,7 @@ class PerturbationPipeline:
 
                 # Check for label changes
                 candidate_result = self._compute_labels(candidate_graph)
-                candidate_labels = candidate_result.labels
+                candidate_labels = candidate_result.node_labels
                 changed_nodes = {
                     node: (original_labels.get(node), candidate_labels[node])
                     for node in candidate_labels

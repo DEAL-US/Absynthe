@@ -70,7 +70,7 @@ class GraphDatasetGenerator:
             self._perturbation_dirs[folder] = pert_dir
 
     def _compute_and_store_labels(self, graph: nx.Graph, attribute_name: str) -> LabelingResult:
-        """Compute labels using all labeling functions and store them as node/graph attributes.
+        """Compute labels using all labeling functions and store them as node/edge/graph attributes.
 
         Args:
             graph: The graph to label (modified in place).
@@ -80,13 +80,17 @@ class GraphDatasetGenerator:
         Returns:
             The merged ``LabelingResult`` from all labeling functions.
         """
-        merged = LabelingResult(labels={})
+        merged = LabelingResult(node_labels={})
         for lf in self.labeling_functions:
-            result = lf.compute_labels(graph)
-            for node, label in result.labels.items():
+            result = lf.label(graph)
+            for node, label in result.node_labels.items():
                 graph.nodes[node][attribute_name] = label
                 graph.nodes[node]['label'] = label
-            merged.labels.update(result.labels)
+            for (u, v), label in result.edge_labels.items():
+                if graph.has_edge(u, v):
+                    graph.edges[u, v]['label'] = label
+            merged.node_labels.update(result.node_labels)
+            merged.edge_labels.update(result.edge_labels)
             merged.graph_labels.update(result.graph_labels)
             for node, det in result.details.items():
                 merged.details.setdefault(node, {}).update(det)

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from .perturbation_hint import PerturbationHint
 
@@ -9,7 +9,8 @@ class LabelingResult:
     """Rich result from a labeling function.
 
     Attributes:
-        labels: Mapping from node ID to its label (node-level labeling).
+        node_labels: Mapping from node ID to its label (node-level labeling).
+        edge_labels: Mapping from edge tuple (u, v) to its label (edge-level labeling).
         graph_labels: Named graph-level labels, keyed by label name.
             Multiple labeling functions can contribute different graph-level
             labels without overwriting each other.
@@ -25,7 +26,8 @@ class LabelingResult:
             ``details`` (``motif_nodes`` / ``motif_edges``).
     """
 
-    labels: Dict[int, Any]
+    node_labels: Dict[int, Any]
+    edge_labels: Dict[Tuple[int, int], Any] = field(default_factory=dict)
     graph_labels: Dict[str, Any] = field(default_factory=dict)
     details: Dict[int, Dict[str, Any]] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)

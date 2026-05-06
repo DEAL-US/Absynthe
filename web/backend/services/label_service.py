@@ -17,8 +17,8 @@ def _apply_labels(
 ) -> None:
     labelers = build_labeling_functions(labeling_configs)
     for labeler in labelers:
-        result = labeler.compute_labels(graph)
-        for node, label in result.labels.items():
+        result = labeler.label(graph)
+        for node, label in result.node_labels.items():
             if node in graph:
                 graph.nodes[node][attribute_name] = label
                 graph.nodes[node]["label"] = label

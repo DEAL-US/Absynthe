@@ -4,28 +4,24 @@ from interfaces.labeling_result import LabelingResult
 
 
 class LabelingFunction(abc.ABC):
-    """Abstract base class for computing labels on a graph.
+    """Abstract base class for labeling a graph.
 
-    A labeling function takes a graph and returns a ``LabelingResult``
-    containing node-level labels, optional graph-level labels, per-node
-    detail information, and arbitrary metadata.
-
-    Implementations may populate any combination of these fields.  For
-    example, a motif-based labeler fills ``labels`` and ``details``
-    while a graph-classification labeler fills ``graph_labels``.
+    Implementations decide which fields of LabelingResult to populate:
+    node labels (labels), edge labels (edge_labels), graph-level labels
+    (graph_labels), or any combination.
 
     Implementations should NOT mutate the input graph.
     """
 
     @abc.abstractmethod
-    def compute_labels(self, graph: nx.Graph) -> LabelingResult:
-        """Compute labels for the graph.
+    def label(self, graph: nx.Graph) -> LabelingResult:
+        """Label the graph and return results.
 
         Args:
             graph: The graph to label.
 
         Returns:
-            A ``LabelingResult`` with node labels, graph labels,
-            per-node details, and/or global metadata.
+            A LabelingResult with any subset of labels, edge_labels,
+            graph_labels, details, and metadata populated.
         """
         pass
