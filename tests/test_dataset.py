@@ -1,15 +1,26 @@
+"""Smoke test for ``GraphDatasetGenerator`` on plain motif graphs.
+
+Run with ``pytest tests/`` or ``python tests/test_dataset.py``. Output goes
+to ``test_output/`` in the repository root (git-ignored).
+"""
 import os
-from graph.dataset_generator import GraphDatasetGenerator
-from graph.composite_graph_generator import MotifComposite
-from graph.labeling_functions import MotifLabelingFunction
-from graph.perturbations import RemoveNodesPerturbation, EdgePerturbation
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
+from graph.composite_graph_generator import MotifComposite  # noqa: E402
+from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
+from graph.perturbations import RemoveNodesPerturbation, EdgePerturbation  # noqa: E402
 
 
 def test_graph_dataset_generator():
     """
     Test the GraphDatasetGenerator with the new pluggable architecture.
     """
-    output_dir = "test_output"
+    output_dir = str(REPO_ROOT / "test_output")
 
     # Clean up previous test output if it exists
     if os.path.exists(output_dir):
@@ -44,7 +55,11 @@ def test_graph_dataset_generator():
 
     # 4. Assertions
     assert os.path.exists(output_dir), "Output directory was not created."
-    assert os.path.exists(os.path.join(output_dir, "graphs")), "Graphs directory was not created."
+    assert os.path.exists(os.path.join(output_dir, "originals")), "Originals directory was not created."
+    for perturbation, _ in perturbations:
+        assert os.path.exists(os.path.join(output_dir, perturbation.folder_name)), (
+            f"Perturbation directory '{perturbation.folder_name}' was not created."
+        )
     assert os.path.exists(os.path.join(output_dir, "metadata.json")), "Metadata file was not created."
 
     # Print metadata for verification
@@ -52,11 +67,10 @@ def test_graph_dataset_generator():
     for entry in metadata:
         print(entry)
 
-    # Check we have originals and variants
-    originals = [m for m in metadata if m["is_original"]]
-    variants = [m for m in metadata if not m["is_original"]]
-    print(f"\nOriginal graphs: {len(originals)}")
-    print(f"Perturbed variants: {len(variants)}")
+    # Every entry is a perturbed variant referencing its original
+    originals = {m["original_graph_path"] for m in metadata}
+    print(f"\nOriginal graphs referenced: {len(originals)}")
+    print(f"Perturbed variants: {len(metadata)}")
 
 
 if __name__ == "__main__":

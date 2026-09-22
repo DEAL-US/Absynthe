@@ -19,10 +19,12 @@ Two configuration sources are supported, like in `gen_dataset.py`:
   - **JSON mode**: pass a config file path, or `--json` to load
     `configs/kg_example.json`.
 
-Examples
-    python gen_kg_dataset.py                     # Python mode (DATASET_CONFIGS)
-    python gen_kg_dataset.py configs/kg_example.json
-    python gen_kg_dataset.py --json              # equivalent to the previous line
+Run from the repository root (`datasets_kg/` and `examples/rdf` resolve
+against the current directory):
+
+    python scripts/gen_kg_dataset.py                     # Python mode (DATASET_CONFIGS)
+    python scripts/gen_kg_dataset.py configs/kg_example.json
+    python scripts/gen_kg_dataset.py --json              # equivalent to the previous line
 
 Each dataset ends up under `datasets_kg/<name>/` with:
 
@@ -38,16 +40,21 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from gen_dataset import _datasets_from_json, run_pipeline
-from graph.folder_graph_generator import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+for _p in (REPO_ROOT, REPO_ROOT / "scripts"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
+
+from gen_dataset import _datasets_from_json, run_pipeline  # noqa: E402
+from graph.folder_graph_generator import (  # noqa: E402
     ExhaustionPolicy,
     FolderGraphGenerator,
     IterationOrder,
 )
-from graph.kg_labeling_functions import EntityTypeLabelingFunction
-from graph.kg_perturbations import CorruptTriplesPerturbation
-from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation
-from graph.schema_kg_generator import SchemaKGGenerator
+from graph.kg_labeling_functions import EntityTypeLabelingFunction  # noqa: E402
+from graph.kg_perturbations import CorruptTriplesPerturbation  # noqa: E402
+from graph.perturbations import RemoveEdgesPerturbation, RemoveNodesPerturbation  # noqa: E402
+from graph.schema_kg_generator import SchemaKGGenerator  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +176,7 @@ def _datasets_from_python_configs() -> List[Dict[str, Any]]:
 # CLI
 # ---------------------------------------------------------------------------
 
-DEFAULT_JSON_PATH = "configs/kg_example.json"
+DEFAULT_JSON_PATH = str(REPO_ROOT / "configs" / "kg_example.json")
 
 
 def _parse_args(argv: List[str]) -> argparse.Namespace:

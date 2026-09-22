@@ -9,10 +9,12 @@ Two configuration sources are supported:
     `DatasetGenerateRequest` model used by the web backend, so an experiment
     can be reproduced from a single file.
 
-Examples
-    python gen_dataset.py                    # Python mode (DATASET_CONFIGS)
-    python gen_dataset.py configs/default.json
-    python gen_dataset.py --json             # equivalent to the previous line
+Run from the repository root (relative paths such as `datasets/` and
+`configs/` resolve against the current directory):
+
+    python scripts/gen_dataset.py                    # Python mode (DATASET_CONFIGS)
+    python scripts/gen_dataset.py configs/default.json
+    python scripts/gen_dataset.py --json             # equivalent to the previous line
 """
 from __future__ import annotations
 
@@ -22,16 +24,20 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from utils.rng import set_seed, reset_rng
-from graph.random_motif_composite import RandomMotifComposite
-from graph.dataset_generator import GraphDatasetGenerator
-from graph.labeling_functions import MotifLabelingFunction
-from graph.perturbations import (
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from utils.rng import set_seed, reset_rng  # noqa: E402
+from graph.random_motif_composite import RandomMotifComposite  # noqa: E402
+from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
+from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
+from graph.perturbations import (  # noqa: E402
     RemoveNodesPerturbation,
     RemoveEdgesPerturbation,
     EdgePerturbation,
 )
-from utils.distributions import IntDistribution
+from utils.distributions import IntDistribution  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -185,20 +191,8 @@ def run_pipeline(
         num_graphs = entry["gen_kwargs"]["num_graphs"]
         print(f"  -> {len(metadata)} perturbed variants from {num_graphs} base graphs")
 
-        # print(f"  Saving visualizations...")
-        # for entry in metadata:
-        #     graph = nx.read_graphml(entry["graph_path"])
-        #     title = f"{dataset_name} graph_{entry['graph_id']} (perturbed)"
-        #     filename = entry["graph_path"].replace(".graphml", ".png")
-        #     visualize_graph(graph, title=title, filename=filename)
-    
-        # originals_dir = Path(f"datasets/{dataset_name}/originals")
-        # for orig_path in sorted(originals_dir.glob("*.graphml")):
-        #     graph = nx.read_graphml(str(orig_path))
-        #     title = f"{dataset_name} {orig_path.stem} (original)"
-        #     filename = str(orig_path.with_suffix(".png"))
-        #     visualize_graph(graph, title=title, filename=filename)
-        # print()
+        # To render every graph, use scripts/reconstruct_variant.py on a single
+        # variant or utils.visualize.visualize_graph over the metadata entries.
 
     if seed is not None:
         reset_rng()
@@ -209,7 +203,7 @@ def run_pipeline(
 # CLI
 # ---------------------------------------------------------------------------
 
-DEFAULT_JSON_PATH = "configs/default.json"
+DEFAULT_JSON_PATH = str(REPO_ROOT / "configs" / "default.json")
 
 
 def _parse_args(argv: List[str]) -> argparse.Namespace:

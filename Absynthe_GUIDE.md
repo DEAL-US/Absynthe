@@ -551,7 +551,7 @@ metadata = generator.generate_dataset(num_graphs=20)
 ## 10. Visualization
 
 ```python
-from visualize import visualize_graph
+from utils.visualize import visualize_graph
 
 visualize_graph(graph, title="My Graph", filename="output/my_graph.png")
 ```
@@ -770,7 +770,7 @@ perturbed = load_graph_file(entry["graph_path"])
 original = reconstruct_original(perturbed, normalize_changes(entry["perturbation_info"]["changes"], perturbed))
 ```
 
-The same workflow is available from JSON configs (`kg_schema` or `folder_source` as the graph source, `entity_type_labeling`, `corrupt_triples`, `relations` on edge perturbations): see `configs/kg_example.json` and run `python gen_dataset.py configs/kg_example.json`.
+The same workflow is available from JSON configs (`kg_schema` or `folder_source` as the graph source, `entity_type_labeling`, `corrupt_triples`, `relations` on edge perturbations): see `configs/kg_example.json` and run `python scripts/gen_kg_dataset.py configs/kg_example.json` from the repository root.
 
 ### Helper API (`utils.kg_utils`)
 
