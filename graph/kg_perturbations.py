@@ -21,7 +21,12 @@ class CorruptTriplesPerturbation(Perturbation):
 
     Modes:
         ``"relation"``: replace the relation type by another one from the
-            graph's vocabulary.
+            graph's vocabulary. With ``same_type`` (default), relations that
+            already occur between the same pair of entity types are
+            preferred, so the corrupted triple stays schema-consistent
+            (``Person -works_at-> Company`` becomes ``Person -founded->
+            Company`` rather than ``Person -cites-> Company``); the full
+            vocabulary is used only when no such relation exists.
         ``"head"`` / ``"tail"``: replace one endpoint by another node
             (of the same entity ``type`` when ``same_type`` and types exist).
         ``"any"``: pick one of the above at random per triple.
@@ -95,6 +100,15 @@ class CorruptTriplesPerturbation(Perturbation):
         nodes = list(G.nodes())
         records: List[Dict[str, Any]] = []
 
+        # Relations observed per (head type, tail type), used to keep
+        # relation swaps schema-consistent when entity types are available.
+        pair_relations: Dict[Tuple[Any, Any], set] = {}
+        if self.same_type:
+            for a, b, _, d in iter_edges(G):
+                ta, tb = G.nodes[a].get(NODE_TYPE_ATTR), G.nodes[b].get(NODE_TYPE_ATTR)
+                if ta is not None and tb is not None and EDGE_RELATION_ATTR in d:
+                    pair_relations.setdefault((ta, tb), set()).add(str(d[EDGE_RELATION_ATTR]))
+
         for u, v, key, attrs in chosen:
             mode = self.mode
             if mode == "any":
@@ -107,6 +121,10 @@ class CorruptTriplesPerturbation(Perturbation):
                     r for r in vocab
                     if r != current and not self._triple_exists(G, u, v, r)
                 ]
+                type_pair = (G.nodes[u].get(NODE_TYPE_ATTR), G.nodes[v].get(NODE_TYPE_ATTR))
+                consistent = [r for r in options if r in pair_relations.get(type_pair, ())]
+                if consistent:
+                    options = consistent
                 if not options:
                     continue
                 new_attrs[EDGE_RELATION_ATTR] = rng.choice(options)

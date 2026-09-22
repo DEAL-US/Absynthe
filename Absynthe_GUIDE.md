@@ -727,7 +727,7 @@ CorruptTriplesPerturbation(num_triples=2, mode="tail")       # swap the tail
 CorruptTriplesPerturbation(num_triples=2, mode="any")
 ```
 
-`CorruptTriplesPerturbation` never creates a triple that already exists. Its change record is:
+`CorruptTriplesPerturbation` never creates a triple that already exists. With `same_type=True` (the default) a relation swap prefers relations that already occur between the same pair of entity types, so the corrupted triple stays schema-consistent (`Person -works_at-> Company` becomes `Person -founded-> Company`, not `Person -cites-> Company`); the full vocabulary is used only when no such relation exists. Its change record is:
 
 ```python
 changes = {

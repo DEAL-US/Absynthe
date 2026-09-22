@@ -82,7 +82,7 @@ python scripts/gen_kg_dataset.py configs/kg_example.json   # JSON mode → datas
 
 It uses `entity_type_labeling` (node labels from entity types and relation patterns, edge labels from relation types), relation-filtered edge removal (`remove_edges` with `relations`), `corrupt_triples` and attribute-based node removal. Every variant is saved as GraphML plus a triples file, and `metadata.json` records the graph kind and the reversible changes (with edge keys). The programmatic API is documented in the "Knowledge graphs" section of [Absynthe_GUIDE.md](Absynthe_GUIDE.md); [tests/test_kg.py](tests/test_kg.py) exercises it end to end.
 
-For a short narrative example that walks through the building blocks on a single graph (composition, labeling, one perturbation, visualization), see [examples/single_graph_walkthrough.py](examples/single_graph_walkthrough.py).
+For short narrative examples that walk through the building blocks on a single graph (composition, labeling, one perturbation, reconstruction, visualization), see [examples/single_graph_walkthrough.py](examples/single_graph_walkthrough.py) for motif graphs and [examples/kg_walkthrough.py](examples/kg_walkthrough.py) for knowledge graphs.
 
 For the full API walkthrough — motif tables, composition parameters, custom labelers and custom motifs — see the companion guide [Absynthe_GUIDE.md](Absynthe_GUIDE.md).
 
@@ -110,7 +110,7 @@ python scripts/reconstruct_variant.py datasets_kg/synthetic_kg 3
 - [configs/](configs/) — JSON suites: [configs/default.json](configs/default.json) (motif datasets), [configs/kg_example.json](configs/kg_example.json) (knowledge graphs). [examples/rdf/](examples/rdf/) holds a small Turtle knowledge graph.
 - [web/](web/) — FastAPI backend + React/TypeScript frontend.
 - [tests/](tests/) — pytest suite: [tests/test_kg.py](tests/test_kg.py), [tests/test_edge_labels.py](tests/test_edge_labels.py), [tests/test_dataset.py](tests/test_dataset.py).
-- [examples/](examples/) — [examples/single_graph_walkthrough.py](examples/single_graph_walkthrough.py) and the sample RDF knowledge graph in [examples/rdf/](examples/rdf/).
+- [examples/](examples/) — [examples/single_graph_walkthrough.py](examples/single_graph_walkthrough.py), [examples/kg_walkthrough.py](examples/kg_walkthrough.py) and the sample RDF knowledge graph in [examples/rdf/](examples/rdf/).
 - [scripts/](scripts/) — command-line entry points: [scripts/gen_dataset.py](scripts/gen_dataset.py), [scripts/gen_kg_dataset.py](scripts/gen_kg_dataset.py), [scripts/reconstruct_variant.py](scripts/reconstruct_variant.py), [scripts/visualize_graph_dataset.py](scripts/visualize_graph_dataset.py). Run them from the repository root.
 - Companion docs: [Absynthe_GUIDE.md](Absynthe_GUIDE.md).
 
