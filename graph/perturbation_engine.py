@@ -1,9 +1,8 @@
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 
-import networkx as nx
-
-from interfaces import Perturbation, LabelingFunction, PerturbationHint
+from interfaces import Perturbation, LabelingFunction, PerturbationHint, GraphLike
 from interfaces.labeling_result import LabelingResult
+from utils.kg_utils import unpack_ref
 
 
 class PerturbationPipeline:
@@ -13,9 +12,9 @@ class PerturbationPipeline:
     LabelingFunction instances. For each pair, the perturbation is applied
     repeatedly to the ORIGINAL graph; each application is checked against
     the labeling functions and only accepted if it causes at least one label
-    change. The process continues until the desired count of successful
-    (label-changing) applications is reached, or max_iterations total
-    attempts are exhausted.
+    change (node, edge or graph level). The process continues until the
+    desired count of successful (label-changing) applications is reached,
+    or max_iterations total attempts are exhausted.
 
     Each successful application produces an independent perturbed graph
     derived from the same original.
@@ -42,7 +41,7 @@ class PerturbationPipeline:
         self.labeling_functions = labeling_functions
         self.max_iterations = max_iterations
 
-    def _compute_labels(self, graph: nx.Graph) -> LabelingResult:
+    def _compute_labels(self, graph: GraphLike) -> LabelingResult:
         """Compute labels using all labeling functions.
 
         Later labeling functions overwrite earlier ones for the same node.
@@ -68,19 +67,23 @@ class PerturbationPipeline:
                 )
 
         if merged.hint is None or merged.hint.is_empty():
-            derived = self._derive_hint_from_details(merged.details)
+            derived = self._derive_hint_from_details(merged.details, graph)
             merged.hint = derived if not derived.is_empty() else None
         return merged
 
     @staticmethod
     def _derive_hint_from_details(
-        details: Dict[int, Dict[str, Any]]
+        details: Dict[Any, Dict[str, Any]],
+        graph: Optional[GraphLike] = None,
     ) -> PerturbationHint:
         """Derive a PerturbationHint from per-node ``details``.
 
         Looks for ``motif_nodes`` and ``motif_edges`` entries and
-        accumulates them, normalizing edges to ``(min, max)``.
+        accumulates them. Edge references may be ``(u, v)`` or
+        ``(u, v, key)``; endpoints are kept in order on directed graphs
+        and normalized to ``(min, max)`` otherwise.
         """
+        directed = bool(graph is not None and graph.is_directed())
         hint = PerturbationHint()
         for det in details.values():
             motif_nodes = det.get("motif_nodes")
@@ -89,16 +92,27 @@ class PerturbationPipeline:
             motif_edges = det.get("motif_edges")
             if motif_edges:
                 for edge in motif_edges:
-                    u, v = edge[0], edge[1]
-                    hint.edges.add(PerturbationHint.normalize_edge(u, v))
+                    u, v, key = unpack_ref(edge)
+                    hint.edges.add(
+                        PerturbationHint.normalize_edge(u, v, key, directed=directed)
+                    )
         return hint
 
-    def apply_and_check(self, graph: nx.Graph) -> List[Dict[str, Any]]:
+    @staticmethod
+    def _diff(original: Dict[Any, Any], candidate: Dict[Any, Any]) -> Dict[Any, Tuple[Any, Any]]:
+        return {
+            k: (original.get(k), candidate[k])
+            for k in candidate
+            if candidate[k] != original.get(k)
+        }
+
+    def apply_and_check(self, graph: GraphLike) -> List[Dict[str, Any]]:
         """Apply perturbations to the original graph, only accepting those that change labels.
 
         For each (perturbation, desired_count) pair:
           - Apply the perturbation to the ORIGINAL graph (not accumulated)
-          - Check if labels changed compared to the original
+          - Check if labels changed compared to the original (node labels,
+            edge labels or graph-level labels)
           - If labels changed: accept (store the perturbed graph)
           - If labels didn't change: discard, try again
           - Stop when desired_count successful applications are reached
@@ -113,12 +127,13 @@ class PerturbationPipeline:
             - 'perturbed_graph': the independently perturbed graph
             - 'changes': what the perturbation changed (from Perturbation.apply)
             - 'changed_nodes': {node: (old_label, new_label)} for nodes whose label changed
+            - 'changed_edges': {edge_ref: (old_label, new_label)} for edges whose label changed
+            - 'changed_graph_labels': {name: (old, new)} for graph-level labels that changed
             - 'labeling_result': full LabelingResult for the perturbed graph
             - 'original_labeling_result': full LabelingResult for the original graph
             - 'perturbation_folder': folder_name of the perturbation that produced this variant
         """
         original_result = self._compute_labels(graph)
-        original_labels = original_result.node_labels
         results = []
 
         for perturbation, desired_count in self.perturbations:
@@ -135,19 +150,18 @@ class PerturbationPipeline:
 
                 # Check for label changes
                 candidate_result = self._compute_labels(candidate_graph)
-                candidate_labels = candidate_result.node_labels
-                changed_nodes = {
-                    node: (original_labels.get(node), candidate_labels[node])
-                    for node in candidate_labels
-                    if candidate_labels[node] != original_labels.get(node)
-                }
+                changed_nodes = self._diff(original_result.node_labels, candidate_result.node_labels)
+                changed_edges = self._diff(original_result.edge_labels, candidate_result.edge_labels)
+                changed_graph = self._diff(original_result.graph_labels, candidate_result.graph_labels)
 
-                if changed_nodes:
+                if changed_nodes or changed_edges or changed_graph:
                     successes += 1
                     results.append({
                         "perturbed_graph": candidate_graph,
                         "changes": changes,
                         "changed_nodes": changed_nodes,
+                        "changed_edges": changed_edges,
+                        "changed_graph_labels": changed_graph,
                         "labeling_result": candidate_result,
                         "original_labeling_result": original_result,
                         "perturbation_folder": perturbation.folder_name,

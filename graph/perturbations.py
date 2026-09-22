@@ -1,8 +1,19 @@
 import random
 from typing import Optional, Dict, Any, Tuple, List
-import networkx as nx
-from interfaces import Perturbation, PerturbationHint
+
+from interfaces import Perturbation, PerturbationHint, GraphLike
 from .perturbation_strategies import STRATEGY_MAP
+from utils.kg_utils import (
+    EDGE_RELATION_ATTR,
+    add_edge,
+    edge_record,
+    incident_edges,
+    is_kg,
+    iter_edges,
+    non_edges,
+    relation_vocab,
+    remove_edge,
+)
 from utils.rng import get_rng
 
 
@@ -10,7 +21,8 @@ from utils.rng import get_rng
 # Hint helpers
 # ---------------------------------------------------------------------------
 
-def _edge_in_zone(u: int, v: int, hint: Optional[PerturbationHint]) -> bool:
+def _edge_in_zone(u: Any, v: Any, hint: Optional[PerturbationHint],
+                  key: Optional[Any] = None, directed: bool = False) -> bool:
     """An edge belongs to the hint zone if at least one endpoint is in
     ``hint.nodes`` or the edge itself is in ``hint.edges``. With no hint
     (or an empty one) every edge qualifies.
@@ -19,19 +31,25 @@ def _edge_in_zone(u: int, v: int, hint: Optional[PerturbationHint]) -> bool:
         return True
     if u in hint.nodes or v in hint.nodes:
         return True
-    return PerturbationHint.normalize_edge(u, v) in hint.edges
+    return hint.contains_edge(u, v, key, directed=directed)
+
+
+def _relation_allowed(attrs: Dict[str, Any], relations: Optional[List[str]]) -> bool:
+    if not relations:
+        return True
+    return str(attrs.get(EDGE_RELATION_ATTR)) in relations
 
 
 # ---------------------------------------------------------------------------
 # Utility functions (used internally by the perturbation classes below)
 # ---------------------------------------------------------------------------
 
-def remove_nodes(graph: nx.Graph,
+def remove_nodes(graph: GraphLike,
                  n: int,
                  strategy: str = 'motif',
                  params: Optional[Dict] = None,
                  rng: Optional[random.Random] = None,
-                 hint: Optional[PerturbationHint] = None) -> Tuple[nx.Graph, List[int]]:
+                 hint: Optional[PerturbationHint] = None) -> Tuple[GraphLike, List[Any]]:
     """Remove n nodes according to the requested strategy and return (new_graph, removed_nodes).
 
     Args:
@@ -68,13 +86,19 @@ def remove_nodes(graph: nx.Graph,
     return G, to_remove
 
 
-def perturb_edges(graph: nx.Graph,
+def perturb_edges(graph: GraphLike,
                   p_remove: float = 0.0,
                   p_add: float = 0.0,
                   add_num: Optional[int] = None,
                   rng: Optional[random.Random] = None,
-                  hint: Optional[PerturbationHint] = None) -> nx.Graph:
+                  hint: Optional[PerturbationHint] = None,
+                  relations: Optional[List[str]] = None,
+                  add_relation: Optional[str] = None,
+                  ) -> Tuple[GraphLike, List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Perturb edges by removing existing edges and/or adding new ones.
+
+    Works on any NetworkX graph class. Direction is honoured on directed
+    graphs and parallel edges are handled individually on multigraphs.
 
     Args:
         graph: The input graph.
@@ -85,28 +109,51 @@ def perturb_edges(graph: nx.Graph,
         hint: Optional perturbation hint. When provided and non-empty, only
             edges/non-edges with at least one endpoint in ``hint.nodes``
             (or an existing edge listed in ``hint.edges``) are considered.
+        relations: Optional list of relation types; when given, only edges
+            whose ``relation`` attribute is in the list can be removed.
+        add_relation: Relation type assigned to added edges on knowledge
+            graphs. Defaults to a random relation from the graph's vocabulary.
+
+    Returns:
+        ``(perturbed_graph, removed_records, added_records)`` where the
+        records are the reversible change dicts ``{"u", "v"[, "key"], "attrs"}``.
     """
     rng = rng or get_rng()
     G = graph.copy()
+    directed = G.is_directed()
+    removed: List[Dict[str, Any]] = []
+    added: List[Dict[str, Any]] = []
 
     if p_remove > 0:
-        for u, v in list(G.edges()):
-            if not _edge_in_zone(u, v, hint):
+        for u, v, k, d in list(iter_edges(G)):
+            if not _edge_in_zone(u, v, hint, k, directed):
+                continue
+            if not _relation_allowed(d, relations):
                 continue
             if rng.random() < p_remove:
-                G.remove_edge(u, v)
+                removed.append(edge_record(G, u, v, k))
+                remove_edge(G, u, v, k)
 
-    non_edges = [(u, v) for u, v in nx.non_edges(G) if _edge_in_zone(u, v, hint)]
+    candidates = [(u, v) for u, v in non_edges(G) if _edge_in_zone(u, v, hint, None, directed)]
+    chosen: List[Tuple[Any, Any]] = []
     if add_num is not None:
-        add_num = min(add_num, len(non_edges))
-        additions = rng.sample(non_edges, add_num) if add_num > 0 else []
-        G.add_edges_from(additions)
+        add_num = min(add_num, len(candidates))
+        chosen = rng.sample(candidates, add_num) if add_num > 0 else []
     elif p_add > 0:
-        for u, v in non_edges:
-            if rng.random() < p_add:
-                G.add_edge(u, v)
+        chosen = [(u, v) for u, v in candidates if rng.random() < p_add]
 
-    return G
+    if chosen:
+        vocab = relation_vocab(G) if (is_kg(G) and add_relation is None) else []
+        for u, v in chosen:
+            attrs: Dict[str, Any] = {}
+            if add_relation is not None:
+                attrs[EDGE_RELATION_ATTR] = add_relation
+            elif vocab:
+                attrs[EDGE_RELATION_ATTR] = rng.choice(vocab)
+            key = add_edge(G, u, v, **attrs)
+            added.append(edge_record(G, u, v, key, attrs=attrs, with_attrs=bool(attrs)))
+
+    return G, removed, added
 
 
 # ---------------------------------------------------------------------------
@@ -129,9 +176,9 @@ class RemoveNodesPerturbation(Perturbation):
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph,
+    def apply(self, graph: GraphLike,
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph, Dict[str, Any]]:
+              ) -> Tuple[GraphLike, Dict[str, Any]]:
         new_graph, removed = remove_nodes(
             graph, self.num_nodes, self.strategy,
             self.params, self.rng, hint
@@ -139,8 +186,8 @@ class RemoveNodesPerturbation(Perturbation):
         removed_info = []
         for n in removed:
             incident = [
-                {"u": n, "v": nb, "attrs": dict(graph.edges[n, nb])}
-                for nb in graph.neighbors(n)
+                edge_record(graph, u, v, k)
+                for u, v, k, _ in incident_edges(graph, n)
             ]
             removed_info.append({
                 "id": n,
@@ -151,56 +198,62 @@ class RemoveNodesPerturbation(Perturbation):
 
 
 class RemoveEdgesPerturbation(Perturbation):
-    """Remove edges from a graph with a given probability."""
+    """Remove edges from a graph with a given probability.
+
+    On knowledge graphs, ``relations`` restricts removal to the listed
+    relation types (e.g. ``["works_at"]``).
+    """
 
     folder_name = "remove_edges"
 
     def __init__(self, p_remove: float = 0.1,
                  rng: Optional[random.Random] = None,
-                 folder_name: Optional[str] = None):
+                 folder_name: Optional[str] = None,
+                 relations: Optional[List[str]] = None):
         self.p_remove = p_remove
         self.rng = rng
+        self.relations = relations
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph,
+    def apply(self, graph: GraphLike,
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph, Dict[str, Any]]:
-        new_graph = perturb_edges(
-            graph, p_remove=self.p_remove, rng=self.rng, hint=hint
+              ) -> Tuple[GraphLike, Dict[str, Any]]:
+        new_graph, removed, _ = perturb_edges(
+            graph, p_remove=self.p_remove, rng=self.rng, hint=hint,
+            relations=self.relations,
         )
-        removed = set(graph.edges()) - set(new_graph.edges())
-        removed_info = [
-            {"u": u, "v": v, "attrs": dict(graph.edges[u, v])}
-            for u, v in removed
-        ]
-        return new_graph, {"removed_edges": removed_info}
+        return new_graph, {"removed_edges": removed}
 
 
 class AddEdgesPerturbation(Perturbation):
-    """Add random edges to a graph."""
+    """Add random edges to a graph.
+
+    On knowledge graphs, added edges receive ``add_relation`` (or a random
+    relation from the graph's vocabulary when not given).
+    """
 
     folder_name = "add_edges"
 
     def __init__(self, p_add: float = 0.0, add_num: Optional[int] = None,
                  rng: Optional[random.Random] = None,
-                 folder_name: Optional[str] = None):
+                 folder_name: Optional[str] = None,
+                 add_relation: Optional[str] = None):
         self.p_add = p_add
         self.add_num = add_num
         self.rng = rng
+        self.add_relation = add_relation
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph,
+    def apply(self, graph: GraphLike,
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph, Dict[str, Any]]:
-        new_graph = perturb_edges(
+              ) -> Tuple[GraphLike, Dict[str, Any]]:
+        new_graph, _, added = perturb_edges(
             graph, p_add=self.p_add, add_num=self.add_num,
-            rng=self.rng, hint=hint,
+            rng=self.rng, hint=hint, add_relation=self.add_relation,
         )
-        added = set(new_graph.edges()) - set(graph.edges())
-        added_info = [{"u": u, "v": v} for u, v in added]
-        return new_graph, {"added_edges": added_info}
+        return new_graph, {"added_edges": added}
 
 
 class EdgePerturbation(Perturbation):
@@ -211,31 +264,27 @@ class EdgePerturbation(Perturbation):
     def __init__(self, p_remove: float = 0.0, p_add: float = 0.0,
                  add_num: Optional[int] = None,
                  rng: Optional[random.Random] = None,
-                 folder_name: Optional[str] = None):
+                 folder_name: Optional[str] = None,
+                 relations: Optional[List[str]] = None,
+                 add_relation: Optional[str] = None):
         self.p_remove = p_remove
         self.p_add = p_add
         self.add_num = add_num
         self.rng = rng
+        self.relations = relations
+        self.add_relation = add_relation
         if folder_name is not None:
             self.folder_name = folder_name
 
-    def apply(self, graph: nx.Graph,
+    def apply(self, graph: GraphLike,
               hint: Optional[PerturbationHint] = None
-              ) -> Tuple[nx.Graph, Dict[str, Any]]:
-        new_graph = perturb_edges(
+              ) -> Tuple[GraphLike, Dict[str, Any]]:
+        new_graph, removed, added = perturb_edges(
             graph, p_remove=self.p_remove, p_add=self.p_add,
             add_num=self.add_num, rng=self.rng, hint=hint,
+            relations=self.relations, add_relation=self.add_relation,
         )
-        before_edges = set(graph.edges())
-        after_edges = set(new_graph.edges())
-        removed_edges = before_edges - after_edges
-        added_edges = after_edges - before_edges
         return new_graph, {
-            "removed_edges": [
-                {"u": u, "v": v, "attrs": dict(graph.edges[u, v])}
-                for u, v in removed_edges
-            ],
-            "added_edges": [
-                {"u": u, "v": v} for u, v in added_edges
-            ],
+            "removed_edges": removed,
+            "added_edges": added,
         }

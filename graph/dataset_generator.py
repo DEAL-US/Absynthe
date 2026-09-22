@@ -5,10 +5,29 @@ from typing import List, Tuple, Dict, Any, Optional
 
 import networkx as nx
 
-from interfaces import GraphGenerator, LabelingFunction, Perturbation
+from interfaces import GraphGenerator, LabelingFunction, Perturbation, GraphLike
 from interfaces.exceptions import GraphSourceExhausted
 from interfaces.labeling_result import LabelingResult
 from graph.perturbation_engine import PerturbationPipeline
+from utils.kg_utils import (
+    apply_labeling_result,
+    graph_kind,
+    is_kg,
+    is_plain,
+    looks_like_iri,
+    stamp_graph_kind,
+    unpack_ref,
+    write_triples,
+)
+
+
+def _safe_sorted(seq):
+    """``sorted`` that falls back to string order for non-comparable items."""
+    items = list(seq)
+    try:
+        return sorted(items)
+    except TypeError:
+        return sorted(items, key=lambda x: [str(t) for t in (x if isinstance(x, (list, tuple)) else [x])])
 
 
 class GraphDatasetGenerator:
@@ -23,6 +42,11 @@ class GraphDatasetGenerator:
     For each original graph, the pipeline generates multiple perturbed
     variants (one per successful perturbation application). Each variant
     is saved as a separate graph in the dataset.
+
+    The generator is agnostic to the graph class produced by the
+    GraphGenerator: plain undirected graphs and directed multi-relational
+    knowledge graphs (see ``utils.kg_utils``) are handled alike. Knowledge
+    graphs are additionally exported as triples next to each GraphML file.
     """
 
     def __init__(
@@ -32,6 +56,7 @@ class GraphDatasetGenerator:
         perturbations: Optional[List[Tuple[Perturbation, int]]] = None,
         output_dir: str = "output",
         max_perturbation_iterations: int = 10,
+        export_triples: bool = True,
     ):
         """
         Args:
@@ -46,12 +71,16 @@ class GraphDatasetGenerator:
             output_dir: Directory where the dataset will be saved.
             max_perturbation_iterations: Maximum total attempts per
                 perturbation to find label-changing applications.
+            export_triples: When True, graphs flagged as knowledge graphs
+                (``graph.graph["kg"]``) are also written as triples
+                (``.nt`` when node ids are IRIs, ``.tsv`` otherwise).
         """
         self.graph_generator = graph_generator
         self.labeling_functions = labeling_functions or []
         self.perturbations = perturbations or []
         self.output_dir = output_dir
         self.max_perturbation_iterations = max_perturbation_iterations
+        self.export_triples = export_triples
 
         os.makedirs(self.output_dir, exist_ok=True)
         self.originals_dir = os.path.join(self.output_dir, "originals")
@@ -69,7 +98,7 @@ class GraphDatasetGenerator:
             os.makedirs(pert_dir, exist_ok=True)
             self._perturbation_dirs[folder] = pert_dir
 
-    def _compute_and_store_labels(self, graph: nx.Graph, attribute_name: str) -> LabelingResult:
+    def _compute_and_store_labels(self, graph: GraphLike, attribute_name: str) -> LabelingResult:
         """Compute labels using all labeling functions and store them as node/edge/graph attributes.
 
         Args:
@@ -83,22 +112,27 @@ class GraphDatasetGenerator:
         merged = LabelingResult(node_labels={})
         for lf in self.labeling_functions:
             result = lf.label(graph)
-            for node, label in result.node_labels.items():
-                graph.nodes[node][attribute_name] = label
-                graph.nodes[node]['label'] = label
-            for (u, v), label in result.edge_labels.items():
-                if graph.has_edge(u, v):
-                    graph.edges[u, v]['label'] = label
+            apply_labeling_result(graph, result, attribute_name)
             merged.node_labels.update(result.node_labels)
             merged.edge_labels.update(result.edge_labels)
             merged.graph_labels.update(result.graph_labels)
             for node, det in result.details.items():
                 merged.details.setdefault(node, {}).update(det)
             merged.metadata.update(result.metadata)
-        # Store graph-level labels as graph attributes
-        for key, value in merged.graph_labels.items():
-            graph.graph[key] = value
         return merged
+
+    @staticmethod
+    def _serialize_changed_edges(changed_edges: Dict[Tuple, Tuple[Any, Any]]) -> List[Dict[str, Any]]:
+        out = []
+        for ref, (old, new) in changed_edges.items():
+            u, v, key = unpack_ref(ref)
+            rec: Dict[str, Any] = {"u": u, "v": v}
+            if len(ref) >= 3:
+                rec["key"] = key
+            rec["old"] = old
+            rec["new"] = new
+            out.append(rec)
+        return out
 
     def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
         """Generate a dataset of perturbed graph variants.
@@ -117,6 +151,11 @@ class GraphDatasetGenerator:
         metadata entry references the original via ``original_graph_path`` and
         carries a reversible ``perturbation_info.changes`` dict — see
         ``graph.reconstruction.reconstruct_original``.
+
+        For directed / multigraph / knowledge-graph inputs the entry also
+        carries ``graph_kind`` and, when triples are exported, ``triples_path``
+        and ``original_triples_path``. Edge-level label changes are listed
+        under ``perturbation_info.changed_edges``.
 
         Args:
             num_graphs: Number of base graphs to generate.
@@ -153,14 +192,14 @@ class GraphDatasetGenerator:
                     base_motif_instances = [
                         {
                             "motif_name": inst["motif_name"],
-                            "nodes": sorted(inst["nodes"]),
-                            "edges": sorted([list(e) for e in inst["edges"]]),
+                            "nodes": _safe_sorted(inst["nodes"]),
+                            "edges": _safe_sorted([list(e) for e in inst["edges"]]),
                         }
                         for inst in instances
                     ]
 
             original_path = os.path.join(self.originals_dir, f"graph_{i}.graphml")
-            self.save_graph(graph, original_path)
+            original_triples = self.save_graph(graph, original_path)
 
             if not (self.perturbations and self.labeling_functions):
                 continue
@@ -181,18 +220,30 @@ class GraphDatasetGenerator:
                 variant_path = os.path.join(
                     pert_dir, f"graph_{graph_counter}.graphml"
                 )
-                self.save_graph(perturbed, variant_path)
+                variant_triples = self.save_graph(perturbed, variant_path)
+                perturbation_info: Dict[str, Any] = {
+                    "changes": result["changes"],
+                    "changed_nodes": result["changed_nodes"],
+                }
+                if result.get("changed_edges"):
+                    perturbation_info["changed_edges"] = self._serialize_changed_edges(
+                        result["changed_edges"]
+                    )
+                if result.get("changed_graph_labels"):
+                    perturbation_info["changed_graph_labels"] = result["changed_graph_labels"]
                 entry: Dict[str, Any] = {
                     "graph_id": graph_counter,
                     "base_graph_id": i,
                     "graph_path": variant_path,
                     "original_graph_path": original_path,
                     "perturbation_name": pert_folder,
-                    "perturbation_info": {
-                        "changes": result["changes"],
-                        "changed_nodes": result["changed_nodes"],
-                    },
+                    "perturbation_info": perturbation_info,
                 }
+                if not is_plain(graph):
+                    entry["graph_kind"] = graph_kind(graph)
+                if variant_triples:
+                    entry["triples_path"] = variant_triples
+                    entry["original_triples_path"] = original_triples
                 if base_graph_labels:
                     entry["graph_labels"] = base_graph_labels
                 if base_motif_instances:
@@ -204,9 +255,25 @@ class GraphDatasetGenerator:
         self.save_metadata(metadata, metadata_path)
         return metadata
 
-    def save_graph(self, graph, path):
-        """Save a graph to GraphML format."""
+    def save_graph(self, graph: GraphLike, path: str) -> Optional[str]:
+        """Save a graph to GraphML format.
+
+        Knowledge graphs are additionally exported as triples next to the
+        GraphML file when ``export_triples`` is enabled. Returns the path of
+        the triples file, or ``None`` when none was written.
+        """
+        stamp_graph_kind(graph)
         nx.write_graphml(graph, path)
+        if not (self.export_triples and is_kg(graph)):
+            return None
+        base, _ = os.path.splitext(path)
+        if graph.number_of_nodes() > 0 and all(looks_like_iri(n) for n in graph.nodes()):
+            triples_path = base + ".nt"
+            write_triples(graph, triples_path, fmt="nt")
+        else:
+            triples_path = base + ".tsv"
+            write_triples(graph, triples_path, fmt="tsv")
+        return triples_path
 
     def save_metadata(self, metadata, path):
         """Save metadata to a JSON file."""

@@ -36,6 +36,11 @@ class GraphStats(BaseModel):
     num_nodes: int
     num_edges: int
     motif_counts: Dict[str, int]
+    directed: bool = False
+    multigraph: bool = False
+    kg: bool = False
+    relation_counts: Dict[str, int] = Field(default_factory=dict)
+    entity_type_counts: Dict[str, int] = Field(default_factory=dict)
 
 
 class GraphGenerateResponse(BaseModel):

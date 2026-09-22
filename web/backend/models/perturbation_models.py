@@ -31,11 +31,25 @@ class ChangedNode(BaseModel):
 class EdgeChange(BaseModel):
     source: str
     target: str
+    key: Optional[str] = None       # multigraphs only
+    relation: Optional[str] = None  # knowledge graphs only
+
+
+class TripleChange(BaseModel):
+    source: str
+    target: str
+    key: Optional[str] = None
+    relation: Optional[str] = None
+    new_source: str
+    new_target: str
+    new_key: Optional[str] = None
+    new_relation: Optional[str] = None
 
 
 class EdgePerturbInfo(BaseModel):
     removed_edges: List[EdgeChange] = Field(default_factory=list)
     added_edges: List[EdgeChange] = Field(default_factory=list)
+    corrupted_triples: List[TripleChange] = Field(default_factory=list)
 
 
 class PerturbationPreview(BaseModel):

@@ -1,9 +1,10 @@
 """Perturbation service."""
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 import web.backend.services  # noqa: F401
 
 from interfaces import LabelingFunction
+from utils.kg_utils import EDGE_RELATION_ATTR, apply_labeling_result
 from web.backend.models.perturbation_models import (
     ChangedNode,
     EdgeChange,
@@ -11,6 +12,7 @@ from web.backend.models.perturbation_models import (
     PerturbationPreview,
     PerturbationRequest,
     PerturbationResponse,
+    TripleChange,
 )
 from web.backend.services import graph_store, serialization
 from web.backend.services.registry import build_labeling_functions, build_perturbation
@@ -19,13 +21,7 @@ from web.backend.services.registry import build_labeling_functions, build_pertur
 def _apply_observed_labels(graph, labelers: List[LabelingFunction]) -> None:
     """Compute and store observed labels on the perturbed graph."""
     for labeler in labelers:
-        result = labeler.label(graph)
-        for node, label in result.node_labels.items():
-            if node in graph:
-                graph.nodes[node]["observed_ground_truth"] = label
-                graph.nodes[node]["label"] = label
-        for key, value in result.graph_labels.items():
-            graph.graph[key] = value
+        apply_labeling_result(graph, labeler.label(graph), "observed_ground_truth")
 
 
 def _map_changed_nodes(changed_raw: dict) -> List[ChangedNode]:
@@ -35,21 +31,44 @@ def _map_changed_nodes(changed_raw: dict) -> List[ChangedNode]:
     ]
 
 
+def _opt_str(value: Any) -> Optional[str]:
+    return None if value is None else str(value)
+
+
+def _edge_change(rec: Dict[str, Any]) -> EdgeChange:
+    """Map a reversible edge record ``{"u", "v"[, "key"][, "attrs"]}``."""
+    return EdgeChange(
+        source=str(rec["u"]),
+        target=str(rec["v"]),
+        key=_opt_str(rec.get("key")),
+        relation=_opt_str(rec.get("attrs", {}).get(EDGE_RELATION_ATTR)),
+    )
+
+
+def _triple_change(rec: Dict[str, Any]) -> TripleChange:
+    return TripleChange(
+        source=str(rec["u"]),
+        target=str(rec["v"]),
+        key=_opt_str(rec.get("key")),
+        relation=_opt_str(rec.get("attrs", {}).get(EDGE_RELATION_ATTR)),
+        new_source=str(rec["new_u"]),
+        new_target=str(rec["new_v"]),
+        new_key=_opt_str(rec.get("new_key")),
+        new_relation=_opt_str(rec.get("new_attrs", {}).get(EDGE_RELATION_ATTR)),
+    )
+
+
 def _map_edge_info(changes: dict) -> Dict[str, EdgePerturbInfo]:
-    removed_edges = [
-        EdgeChange(source=str(u), target=str(v))
-        for u, v in changes.get("removed_edges", [])
-    ]
-    added_edges = [
-        EdgeChange(source=str(u), target=str(v))
-        for u, v in changes.get("added_edges", [])
-    ]
-    if not removed_edges and not added_edges:
+    removed_edges = [_edge_change(rec) for rec in changes.get("removed_edges", [])]
+    added_edges = [_edge_change(rec) for rec in changes.get("added_edges", [])]
+    corrupted = [_triple_change(rec) for rec in changes.get("corrupted_triples", [])]
+    if not removed_edges and not added_edges and not corrupted:
         return {}
     return {
         "applied": EdgePerturbInfo(
             removed_edges=removed_edges,
             added_edges=added_edges,
+            corrupted_triples=corrupted,
         )
     }
 
@@ -109,7 +128,7 @@ def apply(request: PerturbationRequest) -> PerturbationResponse:
                 message=message,
                 original_elements=original_elements,
                 perturbed_elements=serialization.graph_to_elements(perturbed_graph),
-                removed_nodes=[str(node) for node in changes.get("removed_nodes", [])],
+                removed_nodes=[str(node["id"]) for node in changes.get("removed_nodes", [])],
                 changed_nodes=changed_nodes,
                 edge_perturb_info=_map_edge_info(changes),
             )
