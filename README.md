@@ -11,6 +11,7 @@ The pipeline is agnostic to the kind of graph a `GraphGenerator` produces: plain
 - Flexible labeling: per-node, per-edge, per-graph, or custom combinations via pluggable `LabelingFunction` in [graph/labeling_functions.py](graph/labeling_functions.py) and [interfaces/labeling_function.py](interfaces/labeling_function.py).
 - Reversible perturbations — node removal with six strategies (random, motif, degree, centrality, role, by attribute), edge removal, edge addition, edge rewiring — in [graph/perturbations.py](graph/perturbations.py) and [graph/perturbation_strategies.py](graph/perturbation_strategies.py), plus reconstruction in [graph/reconstruction.py](graph/reconstruction.py).
 - **Knowledge graphs**: any NetworkX graph class is supported end to end (`nx.Graph`, `nx.DiGraph`, `nx.MultiGraph`, `nx.MultiDiGraph`). Conventions and helpers live in [utils/kg_utils.py](utils/kg_utils.py); a schema-driven synthetic KG generator in [graph/schema_kg_generator.py](graph/schema_kg_generator.py); relation-aware labeling in [graph/kg_labeling_functions.py](graph/kg_labeling_functions.py); triple corruption (relation / head / tail) and relation-filtered edge removal in [graph/kg_perturbations.py](graph/kg_perturbations.py); motif matching honours direction, entity types and relation types. KG datasets are exported as GraphML **and** triples (`.tsv` / `.nt`).
+- Pluggable export formats via [graph/exporters.py](graph/exporters.py): GraphML and triples are built in, and a new format is a small `GraphExporter` subclass registered by name and selected with `formats=[...]` (see the "Export formats" section of [Absynthe_GUIDE.md](Absynthe_GUIDE.md)).
 - Folder / RDF graph ingestion via [graph/folder_graph_generator.py](graph/folder_graph_generator.py) — supports `.graphml`, `.rdf`, `.ttl`, `.nt`, `.n3`, `.owl`. RDF files become directed multi-relational graphs: predicates are kept as `relation` edge attributes (parallel predicates preserved), `rdf:type` becomes the node `type`, literals become node attributes.
 - Optional FastAPI + React web interface for interactive exploration (see [web/](web/)).
 
@@ -66,7 +67,7 @@ Next to `metadata.json`, every dataset gets a `config.json` with the seed, the c
   "seed": 42,
   "config": { "...the JSON dataset entry / web request that produced it..." },
   "components": {"graph_generator": {"class": "RandomMotifComposite", "params": {"…": "…"}}, "labeling_functions": [], "perturbations": []},
-  "generation": {"num_graphs": 300, "graph_kwargs": {"…": "…"}, "max_perturbation_iterations": 15, "export_triples": true, "output_dir": "datasets/house"},
+  "generation": {"num_graphs": 300, "graph_kwargs": {"…": "…"}, "max_perturbation_iterations": 15, "formats": ["graphml", "triples"], "output_dir": "datasets/house"},
   "provenance": {"config_path": "…/configs/default.json", "suite_index": 0, "suite_size": 4, "suite_seed": 42, "seed_scope": "suite"}
 }
 ```
@@ -119,13 +120,13 @@ python scripts/reconstruct_variant.py datasets_kg/synthetic_kg 3
 ```
 
 ## Project structure
-- [graph/](graph/) — composite generators, composition engine, dataset orchestrator, labeling functions, perturbations and strategies, reconstruction, folder/RDF loader; knowledge-graph components in [graph/schema_kg_generator.py](graph/schema_kg_generator.py), [graph/kg_labeling_functions.py](graph/kg_labeling_functions.py) and [graph/kg_perturbations.py](graph/kg_perturbations.py).
+- [graph/](graph/) — composite generators, composition engine, dataset orchestrator, export formats ([graph/exporters.py](graph/exporters.py)), labeling functions, perturbations and strategies, reconstruction, folder/RDF loader; knowledge-graph components in [graph/schema_kg_generator.py](graph/schema_kg_generator.py), [graph/kg_labeling_functions.py](graph/kg_labeling_functions.py) and [graph/kg_perturbations.py](graph/kg_perturbations.py).
 - [motifs/](motifs/) — built-in motif generators and the registry in [motifs/__init__.py](motifs/__init__.py).
-- [interfaces/](interfaces/) — abstract base classes (`GraphGenerator`, `MotifGenerator`, `LabelingFunction`, `Perturbation`), data models (`LabelingResult`, `PerturbationHint`) and the `GraphLike` alias ([interfaces/graph_types.py](interfaces/graph_types.py)).
+- [interfaces/](interfaces/) — abstract base classes (`GraphGenerator`, `MotifGenerator`, `LabelingFunction`, `Perturbation`, `GraphExporter`), data models (`LabelingResult`, `PerturbationHint`) and the `GraphLike` alias ([interfaces/graph_types.py](interfaces/graph_types.py)).
 - [utils/](utils/) — global RNG ([utils/rng.py](utils/rng.py)), `IntDistribution` ([utils/distributions.py](utils/distributions.py)), graph helpers, the knowledge-graph conventions and graph-class-agnostic edge helpers in [utils/kg_utils.py](utils/kg_utils.py), and the matplotlib renderer in [utils/visualize.py](utils/visualize.py).
 - [configs/](configs/) — JSON suites: [configs/default.json](configs/default.json) (motif datasets), [configs/kg_example.json](configs/kg_example.json) (knowledge graphs). [examples/rdf/](examples/rdf/) holds a small Turtle knowledge graph.
 - [web/](web/) — FastAPI backend + React/TypeScript frontend.
-- [tests/](tests/) — pytest suite: [tests/test_kg.py](tests/test_kg.py), [tests/test_edge_labels.py](tests/test_edge_labels.py), [tests/test_dataset.py](tests/test_dataset.py).
+- [tests/](tests/) — pytest suite: [tests/test_kg.py](tests/test_kg.py), [tests/test_exporters.py](tests/test_exporters.py), [tests/test_metadata.py](tests/test_metadata.py), [tests/test_edge_labels.py](tests/test_edge_labels.py), [tests/test_dataset.py](tests/test_dataset.py).
 - [examples/](examples/) — [examples/single_graph_walkthrough.py](examples/single_graph_walkthrough.py), [examples/kg_walkthrough.py](examples/kg_walkthrough.py) and the sample RDF knowledge graph in [examples/rdf/](examples/rdf/).
 - [scripts/](scripts/) — command-line entry points: [scripts/gen_dataset.py](scripts/gen_dataset.py), [scripts/gen_kg_dataset.py](scripts/gen_kg_dataset.py), [scripts/reconstruct_variant.py](scripts/reconstruct_variant.py), [scripts/visualize_graph_dataset.py](scripts/visualize_graph_dataset.py). Run them from the repository root.
 - Companion docs: [Absynthe_GUIDE.md](Absynthe_GUIDE.md).

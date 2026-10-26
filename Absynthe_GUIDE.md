@@ -460,7 +460,40 @@ datasets/my_dataset/
   config.json               # seed, configuration and components of the run
 ```
 
-Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.json` maps each variant to its base graph. For knowledge graphs every `.graphml` is accompanied by a triples file (`graph_<n>.tsv`, or `.nt` when node ids are IRIs) unless `export_triples=False`.
+Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.json` maps each variant to its base graph. For knowledge graphs every `.graphml` is accompanied by a triples file (`graph_<n>.tsv`, or `.nt` when node ids are IRIs). Which files are written is decided by the export formats (next section): the default is `formats=["graphml", "triples"]`; pass `formats=["graphml"]` to skip the triples.
+
+### Export Formats
+
+Graphs are written through the exporters in `graph.exporters`. Each format is a `GraphExporter` (from `interfaces`) with a `name` and one method, `export(graph, base_path)`, that receives the destination path **without** extension, writes the file and returns its path (or `None` to skip graphs the format does not apply to). The built-in formats are registered under their names:
+
+| Name | Files | Applies to |
+|---|---|---|
+| `graphml` | `graph_<n>.graphml` (multigraphs are stamped so they reload as such) | every graph |
+| `triples` | `graph_<n>.tsv` (`subject<TAB>relation<TAB>object`), or `graph_<n>.nt` when node ids are IRIs | knowledge graphs only |
+
+`GraphDatasetGenerator(formats=[...])` takes registered names and/or exporter instances (handy for parametrised exporters). The **first** format is the primary one: its file is the `graph_path` of every variant, so it must be readable by `load_graph_file` (GraphML or RDF) for reconstruction and the web browser to reload variants. Every other format that writes a file adds `<name>_path` / `original_<name>_path` to the metadata entry (`triples_path` for knowledge graphs). The names used are recorded under `generation.formats` in `config.json`, and JSON suites / web requests accept the same list as `"formats"`.
+
+Defining a new format is a small subclass registered by name:
+
+```python
+import networkx as nx
+from interfaces import GraphExporter
+from graph.exporters import register_exporter
+
+@register_exporter
+class EdgeListExporter(GraphExporter):
+    name = "edgelist"
+
+    def export(self, graph, base_path):
+        path = base_path + ".edgelist"
+        nx.write_edgelist(graph, path, data=False)
+        return path
+
+generator = GraphDatasetGenerator(..., formats=["graphml", "edgelist"])
+# every metadata entry now also carries edgelist_path / original_edgelist_path
+```
+
+Two exporters must not share a name (or an extension, or they overwrite each other's file); the name `graph` is reserved. `graph.exporters.EXPORTERS` is the registry dict, `resolve_exporters(formats)` turns a list of names/instances into exporters and `export_graph(graph, base_path, exporters)` runs them all.
 
 ### Metadata Format
 
@@ -475,7 +508,7 @@ Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.
         "labeling_functions": [{"class": "MotifLabelingFunction", "module": "graph.labeling_functions", "params": {"motif_order": ["cycle_4", "house"]}}],
         "perturbations": [{"class": "RemoveNodesPerturbation", "module": "graph.perturbations", "params": {"num_nodes": 1, "strategy": "motif", "params": null, "folder_name": "remove_nodes"}, "folder_name": "remove_nodes", "count": 1}]
     },
-    "generation": {"num_graphs": 100, "graph_kwargs": {"num_extra_vertices": 2, "num_extra_edges": 3, "composition": "sequential"}, "max_perturbation_iterations": 10, "export_triples": true, "output_dir": "datasets/my_dataset"},
+    "generation": {"num_graphs": 100, "graph_kwargs": {"num_extra_vertices": 2, "num_extra_edges": 3, "composition": "sequential"}, "max_perturbation_iterations": 10, "formats": ["graphml", "triples"], "output_dir": "datasets/my_dataset"},
     "provenance": {"config_path": "…", "suite_index": 0, "suite_size": 4, "suite_seed": 42, "seed_scope": "suite"}
 }
 ```
@@ -483,7 +516,7 @@ Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.
 - `seed` is the seed passed to `GraphDatasetGenerator(seed=...)`, or else the one last given to `utils.rng.set_seed` (`None` when unseeded). It is recorded, not applied: seed the RNG yourself as in §3.
 - `config` is the declarative configuration handed to `GraphDatasetGenerator(config=...)`; the scripts store the resolved JSON dataset entry and the web backend stores the request. It is `null` for datasets assembled programmatically, in which case `components` is the record to rely on.
 - `components` is always derived from the live objects: class, module and constructor arguments (`rng` excluded). A component may override this by implementing `describe() -> dict`.
-- `generation` keeps the `generate_dataset(...)` call. `provenance` is free-form (`GraphDatasetGenerator(provenance=...)`); the scripts use it to note the config file and the position of the dataset in its suite.
+- `generation` keeps the `generate_dataset(...)` call and the export `formats` used (primary first). `provenance` is free-form (`GraphDatasetGenerator(provenance=...)`); the scripts use it to note the config file and the position of the dataset in its suite.
 - `generate_dataset` returns the variants list written to `metadata.json`; the `config.json` document is available as `generator.last_config`. `graph.dataset_metadata` offers `load_dataset_metadata(path)`, `load_dataset_config(path)` (both accept the dataset directory) and `find_variant(variants, graph_id)`.
 
 `metadata.json` is a list with one entry per perturbed variant:
@@ -512,7 +545,8 @@ Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.
 - `perturbation_info.changed_nodes` maps node IDs to `(old_label, new_label)` pairs for nodes whose label changed as a result of the perturbation.
 - `perturbation_info.changed_edges` (only when present) lists `{"u", "v"[, "key"], "old", "new"}` for edges whose label changed; `changed_graph_labels` does the same for graph-level labels. A perturbation is accepted when any of the three kinds of label changes.
 - `graph_labels` and `motif_instances` describe the **base** graph (copied into every variant that derived from it), not the perturbed variant. Motif instance edges are `[u, v]` lists, or `[u, v, key]` on multigraphs.
-- `graph_kind` (`{"directed", "multigraph", "kg"}`), `triples_path` and `original_triples_path` appear only for directed / multigraph / knowledge-graph datasets, so the metadata of plain datasets is unchanged.
+- `graph_path` / `original_graph_path` point at the primary export format (GraphML by default). Every other format that wrote a file adds `<name>_path` / `original_<name>_path`: `triples_path` and `original_triples_path` for knowledge graphs, `edgelist_path` for a custom `edgelist` exporter, and so on.
+- `graph_kind` (`{"directed", "multigraph", "kg"}`) and the triples paths appear only for directed / multigraph / knowledge-graph datasets, so the metadata of plain datasets is unchanged.
 
 ---
 
@@ -765,7 +799,7 @@ changes = {
 
 ### Datasets, triples and reconstruction
 
-`GraphDatasetGenerator` needs no special configuration. For KGs it writes, next to every `.graphml`, a triples file (`.tsv` with `subject<TAB>relation<TAB>object` lines, or N-Triples `.nt` when node ids are IRIs), and adds `graph_kind`, `triples_path` and `changed_edges` to the metadata (§7). Pass `export_triples=False` to skip the triples.
+`GraphDatasetGenerator` needs no special configuration. With the default formats it writes, next to every `.graphml`, a triples file (`.tsv` with `subject<TAB>relation<TAB>object` lines, or N-Triples `.nt` when node ids are IRIs), and adds `graph_kind`, `triples_path` and `changed_edges` to the metadata (§7). Pass `formats=["graphml"]` to skip the triples, or add your own exporter (see "Export Formats" in §7).
 
 ```python
 from graph.dataset_generator import GraphDatasetGenerator
@@ -807,7 +841,7 @@ The same workflow is available from JSON configs (`kg_schema` or `folder_source`
 | `incident_edges(G, n)` | edges touching `n` with their real endpoint order |
 | `edge_record(G, u, v, key)` | reversible `{"u", "v"[, "key"], "attrs"}` record |
 | `relation_vocab`, `relation_counts`, `entity_type_counts` | vocabulary and statistics |
-| `graph_to_triples`, `write_triples(G, path, fmt="tsv"\|"nt")` | triple export |
+| `graph_to_triples`, `write_triples(G, path, fmt="tsv"\|"nt")` | triple export (used by the `triples` exporter of `graph.exporters`) |
 | `apply_labeling_result(G, result, attr)` | store a `LabelingResult` on the graph |
 | `graph_kind(G)`, `is_kg(G)`, `stamp_graph_kind(G)` | graph-kind introspection |
 

@@ -5,7 +5,7 @@
   "shared": {
     "num_graphs": 50,
     "max_perturbation_iterations": 15,
-    "export_triples": true,
+    "formats": ["graphml", "triples"],
     "labeling_functions": [
       {
         "type": "entity_type_labeling",

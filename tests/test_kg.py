@@ -133,8 +133,8 @@ def test_graphml_multigraph_round_trip():
         g2.add_edge("a", "b", relation="r1")
         g2.add_edge("b", "c", relation="r2")
         for i, g in enumerate((g1, g2)):
-            path = os.path.join(tmp, f"g{i}.graphml")
-            triples = gen.save_graph(g, path)
+            files = gen.save_graph(g, os.path.join(tmp, f"g{i}"))
+            path, triples = files["graphml"], files["triples"]
             back = load_graph_file(path)
             assert back.is_multigraph() and back.is_directed(), type(back)
             assert _edge_set(back) == _edge_set(g)
@@ -147,7 +147,7 @@ def test_triples_export_nt_for_iri_nodes():
     g = load_graph_file(str(SAMPLE_TTL))
     with tempfile.TemporaryDirectory() as tmp:
         gen = GraphDatasetGenerator(SchemaKGGenerator({"A": 1}, []), output_dir=tmp)
-        triples = gen.save_graph(g, os.path.join(tmp, "g.graphml"))
+        triples = gen.save_graph(g, os.path.join(tmp, "g"))["triples"]
         assert triples.endswith(".nt")
         import rdflib
         rg = rdflib.Graph()
@@ -190,8 +190,7 @@ def test_perturb_and_reconstruct_multidigraph():
                 assert "key" in rec and rec["attrs"]["relation"] in ("works_at", "wrote", "cites", "knows")
 
             # same after a GraphML + JSON round trip
-            path = os.path.join(tmp, f"v{i}.graphml")
-            saver.save_graph(H, path)
+            path = saver.save_graph(H, os.path.join(tmp, f"v{i}"))["graphml"]
             loaded = load_graph_file(path)
             ch = normalize_changes(json.loads(json.dumps(changes, default=str)), loaded)
             R2 = reconstruct_original(loaded, ch)

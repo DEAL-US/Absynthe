@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from graph.exporters import DEFAULT_FORMATS
+
 from web.backend.models.graph_models import LabelingFunctionConfig, MotifConfig
 from web.backend.models.perturbation_models import PerturbationConfig
 
@@ -51,7 +53,10 @@ class DatasetGenerateRequest(BaseModel):
     labeling_functions: List[LabelingFunctionConfig] = Field(default_factory=list)
     perturbations: List[PerturbationConfig] = Field(default_factory=list)
     max_perturbation_iterations: int = Field(10, ge=1, le=200)
-    export_triples: bool = True
+    formats: List[str] = Field(
+        default_factory=lambda: list(DEFAULT_FORMATS),
+        description="Export formats (names registered in graph.exporters); the first one is the primary graph file",
+    )
     output_dir: str = "datasets/output"
     seed: Optional[int] = None
 

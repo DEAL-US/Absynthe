@@ -146,7 +146,7 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
             "perturbations": build_perturbations(request.perturbations),
             "output_dir": request.output_dir,
             "max_perturbation_iterations": request.max_perturbation_iterations,
-            "export_triples": request.export_triples,
+            "formats": request.formats,
             # Recorded in metadata.json so the dataset can be replayed from
             # its own folder. A per-dataset `seed` (set in the JSON entry or
             # in `shared`) re-seeds the RNG right before that dataset.
@@ -213,7 +213,7 @@ def run_pipeline(
             perturbations=entry["perturbations"],
             output_dir=entry["output_dir"],
             max_perturbation_iterations=entry["max_perturbation_iterations"],
-            export_triples=entry.get("export_triples", True),
+            formats=entry.get("formats"),
             seed=dataset_seed if dataset_seed is not None else seed,
             config=entry.get("config"),
             provenance=provenance,

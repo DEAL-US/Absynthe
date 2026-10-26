@@ -1,10 +1,8 @@
 import os
 import warnings
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Sequence
 
-import networkx as nx
-
-from interfaces import GraphGenerator, LabelingFunction, Perturbation, GraphLike
+from interfaces import GraphGenerator, GraphExporter, LabelingFunction, Perturbation, GraphLike
 from interfaces.exceptions import GraphSourceExhausted
 from interfaces.labeling_result import LabelingResult
 from graph.dataset_metadata import (
@@ -15,17 +13,14 @@ from graph.dataset_metadata import (
     save_config,
     save_metadata,
 )
+from graph.exporters import FormatSpec, export_graph, resolve_exporters
 from graph.perturbation_engine import PerturbationPipeline
 from utils.rng import get_seed
 from utils.kg_utils import (
     apply_labeling_result,
     graph_kind,
-    is_kg,
     is_plain,
-    looks_like_iri,
-    stamp_graph_kind,
     unpack_ref,
-    write_triples,
 )
 
 
@@ -45,7 +40,7 @@ class GraphDatasetGenerator:
     - A GraphGenerator instance for creating graphs
     - A list of LabelingFunction instances for computing labels
     - A list of (Perturbation, count) pairs for perturbing graphs
-    - Output configuration
+    - Output configuration, including the export formats
 
     For each original graph, the pipeline generates multiple perturbed
     variants (one per successful perturbation application). Each variant
@@ -53,8 +48,9 @@ class GraphDatasetGenerator:
 
     The generator is agnostic to the graph class produced by the
     GraphGenerator: plain undirected graphs and directed multi-relational
-    knowledge graphs (see ``utils.kg_utils``) are handled alike. Knowledge
-    graphs are additionally exported as triples next to each GraphML file.
+    knowledge graphs (see ``utils.kg_utils``) are handled alike. Graphs are
+    written through the exporters of ``graph.exporters``; by default GraphML
+    plus, for knowledge graphs, a triples file next to it.
 
     Besides the graphs, every run writes ``metadata.json`` (one entry per
     variant with its reversible trace) and ``config.json`` (seed, the
@@ -69,7 +65,7 @@ class GraphDatasetGenerator:
         perturbations: Optional[List[Tuple[Perturbation, int]]] = None,
         output_dir: str = "output",
         max_perturbation_iterations: int = 10,
-        export_triples: bool = True,
+        formats: Optional[Sequence[FormatSpec]] = None,
         seed: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
         provenance: Optional[Dict[str, Any]] = None,
@@ -87,9 +83,13 @@ class GraphDatasetGenerator:
             output_dir: Directory where the dataset will be saved.
             max_perturbation_iterations: Maximum total attempts per
                 perturbation to find label-changing applications.
-            export_triples: When True, graphs flagged as knowledge graphs
-                (``graph.graph["kg"]``) are also written as triples
-                (``.nt`` when node ids are IRIs, ``.tsv`` otherwise).
+            formats: Export formats, as registered names or ``GraphExporter``
+                instances (see ``graph.exporters``). The first one is the
+                primary format whose file becomes ``graph_path``; it must be
+                readable by ``load_graph_file``. Defaults to
+                ``("graphml", "triples")``: GraphML for every graph plus
+                triples (``.nt`` for IRI node ids, ``.tsv`` otherwise) for
+                knowledge graphs.
             seed: Seed recorded in ``config.json``. Defaults to the seed
                 last passed to ``utils.rng.set_seed`` (``None`` if unseeded).
                 This does not seed the RNG itself.
@@ -104,7 +104,7 @@ class GraphDatasetGenerator:
         self.perturbations = perturbations or []
         self.output_dir = output_dir
         self.max_perturbation_iterations = max_perturbation_iterations
-        self.export_triples = export_triples
+        self.exporters: List[GraphExporter] = resolve_exporters(formats)
         self.seed = seed
         self.config = config
         self.provenance = provenance
@@ -125,6 +125,11 @@ class GraphDatasetGenerator:
             pert_dir = os.path.join(self.output_dir, folder)
             os.makedirs(pert_dir, exist_ok=True)
             self._perturbation_dirs[folder] = pert_dir
+
+    @property
+    def formats(self) -> List[str]:
+        """Names of the export formats, primary first."""
+        return [exporter.name for exporter in self.exporters]
 
     def _compute_and_store_labels(self, graph: GraphLike, attribute_name: str) -> LabelingResult:
         """Compute labels using all labeling functions and store them as node/edge/graph attributes.
@@ -162,6 +167,24 @@ class GraphDatasetGenerator:
             out.append(rec)
         return out
 
+    def _path_entries(self, variant_files: Dict[str, str], original_files: Dict[str, str]) -> Dict[str, str]:
+        """Metadata keys pointing at the files of a variant and of its original.
+
+        The primary format gives ``graph_path`` / ``original_graph_path``;
+        every other format that wrote a file gives ``<name>_path`` /
+        ``original_<name>_path`` (e.g. ``triples_path``).
+        """
+        primary = self.exporters[0].name
+        entry = {
+            "graph_path": variant_files[primary],
+            "original_graph_path": original_files[primary],
+        }
+        for name, path in variant_files.items():
+            if name != primary:
+                entry[f"{name}_path"] = path
+                entry[f"original_{name}_path"] = original_files[name]
+        return entry
+
     def generate_dataset(self, num_graphs: int, **graph_kwargs) -> List[Dict[str, Any]]:
         """Generate a dataset of perturbed graph variants.
 
@@ -173,17 +196,20 @@ class GraphDatasetGenerator:
            independent perturbed variant
         4. For each variant, compute observed labels and save it
 
-        The base (unperturbed) graph is written to ``originals/graph_<i>.graphml``
-        for every base graph. Each perturbed variant is written to a per-perturbation
-        subfolder named after the perturbation's ``folder_name``. Each variant's
-        metadata entry references the original via ``original_graph_path`` and
-        carries a reversible ``perturbation_info.changes`` dict — see
+        The base (unperturbed) graph is written to ``originals/graph_<i>``
+        (plus the extension of each export format) for every base graph.
+        Each perturbed variant is written to a per-perturbation subfolder
+        named after the perturbation's ``folder_name``. Each variant's
+        metadata entry references the original via ``original_graph_path``
+        and carries a reversible ``perturbation_info.changes`` dict — see
         ``graph.reconstruction.reconstruct_original``.
 
-        For directed / multigraph / knowledge-graph inputs the entry also
-        carries ``graph_kind`` and, when triples are exported, ``triples_path``
-        and ``original_triples_path``. Edge-level label changes are listed
-        under ``perturbation_info.changed_edges``.
+        ``graph_path`` / ``original_graph_path`` point at the primary format;
+        every other format that wrote a file adds ``<name>_path`` and
+        ``original_<name>_path`` (``triples_path`` for knowledge graphs).
+        Directed / multigraph / knowledge-graph inputs also carry
+        ``graph_kind``, and edge-level label changes are listed under
+        ``perturbation_info.changed_edges``.
 
         Args:
             num_graphs: Number of base graphs to generate.
@@ -228,8 +254,7 @@ class GraphDatasetGenerator:
                         for inst in instances
                     ]
 
-            original_path = os.path.join(self.originals_dir, f"graph_{i}.graphml")
-            original_triples = self.save_graph(graph, original_path)
+            original_files = self.save_graph(graph, os.path.join(self.originals_dir, f"graph_{i}"))
 
             if not (self.perturbations and self.labeling_functions):
                 continue
@@ -247,10 +272,7 @@ class GraphDatasetGenerator:
 
                 pert_folder = result["perturbation_folder"]
                 pert_dir = self._perturbation_dirs[pert_folder]
-                variant_path = os.path.join(
-                    pert_dir, f"graph_{graph_counter}.graphml"
-                )
-                variant_triples = self.save_graph(perturbed, variant_path)
+                variant_files = self.save_graph(perturbed, os.path.join(pert_dir, f"graph_{graph_counter}"))
                 perturbation_info: Dict[str, Any] = {
                     "changes": result["changes"],
                     "changed_nodes": result["changed_nodes"],
@@ -264,16 +286,12 @@ class GraphDatasetGenerator:
                 entry: Dict[str, Any] = {
                     "graph_id": graph_counter,
                     "base_graph_id": i,
-                    "graph_path": variant_path,
-                    "original_graph_path": original_path,
+                    **self._path_entries(variant_files, original_files),
                     "perturbation_name": pert_folder,
                     "perturbation_info": perturbation_info,
                 }
                 if not is_plain(graph):
                     entry["graph_kind"] = graph_kind(graph)
-                if variant_triples:
-                    entry["triples_path"] = variant_triples
-                    entry["original_triples_path"] = original_triples
                 if base_graph_labels:
                     entry["graph_labels"] = base_graph_labels
                 if base_motif_instances:
@@ -293,7 +311,7 @@ class GraphDatasetGenerator:
                 "num_graphs": num_graphs,
                 "graph_kwargs": graph_kwargs,
                 "max_perturbation_iterations": self.max_perturbation_iterations,
-                "export_triples": self.export_triples,
+                "formats": self.formats,
                 "output_dir": self.output_dir,
             },
             provenance=self.provenance,
@@ -301,25 +319,14 @@ class GraphDatasetGenerator:
         save_config(self.last_config, os.path.join(self.output_dir, CONFIG_FILENAME))
         return metadata
 
-    def save_graph(self, graph: GraphLike, path: str) -> Optional[str]:
-        """Save a graph to GraphML format.
+    def save_graph(self, graph: GraphLike, base_path: str) -> Dict[str, str]:
+        """Write ``graph`` in every export format next to ``base_path``.
 
-        Knowledge graphs are additionally exported as triples next to the
-        GraphML file when ``export_triples`` is enabled. Returns the path of
-        the triples file, or ``None`` when none was written.
+        ``base_path`` has no extension; each exporter appends its own.
+        Returns ``{format_name: written_path}`` for the formats that wrote a
+        file (e.g. ``{"graphml": ".../graph_0.graphml", "triples": ".../graph_0.tsv"}``).
         """
-        stamp_graph_kind(graph)
-        nx.write_graphml(graph, path)
-        if not (self.export_triples and is_kg(graph)):
-            return None
-        base, _ = os.path.splitext(path)
-        if graph.number_of_nodes() > 0 and all(looks_like_iri(n) for n in graph.nodes()):
-            triples_path = base + ".nt"
-            write_triples(graph, triples_path, fmt="nt")
-        else:
-            triples_path = base + ".tsv"
-            write_triples(graph, triples_path, fmt="tsv")
-        return triples_path
+        return export_graph(graph, base_path, self.exporters)
 
     def save_metadata(self, metadata, path):
         """Save the variants list to a JSON file."""
