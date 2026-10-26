@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from graph.dataset_generator import GraphDatasetGenerator  # noqa: E402
+from graph.dataset_metadata import load_dataset_config, load_dataset_metadata  # noqa: E402
 from graph.composite_graph_generator import MotifComposite  # noqa: E402
 from graph.labeling_functions import MotifLabelingFunction  # noqa: E402
 from graph.perturbations import RemoveNodesPerturbation, EdgePerturbation  # noqa: E402
@@ -61,6 +62,14 @@ def test_graph_dataset_generator():
             f"Perturbation directory '{perturbation.folder_name}' was not created."
         )
     assert os.path.exists(os.path.join(output_dir, "metadata.json")), "Metadata file was not created."
+
+    # metadata.json holds the variants; config.json the provenance of the run
+    assert [e["graph_id"] for e in load_dataset_metadata(output_dir)] == [e["graph_id"] for e in metadata]
+    cfg = load_dataset_config(output_dir)
+    assert cfg == generator.last_config
+    assert cfg["components"]["graph_generator"]["class"] == "MotifComposite"
+    assert [p["count"] for p in cfg["components"]["perturbations"]] == [2, 1]
+    assert cfg["generation"]["num_graphs"] == 3
 
     # Print metadata for verification
     print("Generated Metadata:")

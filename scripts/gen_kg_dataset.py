@@ -30,8 +30,10 @@ Each dataset ends up under `datasets_kg/<name>/` with:
 
     originals/graph_<i>.graphml   base KG (+ graph_<i>.tsv or .nt with its triples)
     <perturbation>/graph_<n>.graphml + triples   perturbed variants
-    metadata.json                 reversible changes (with edge keys), changed
-                                  node/edge labels, graph_kind, triples paths
+    metadata.json                 per variant: reversible changes (with edge
+                                  keys), changed node/edge labels, graph_kind,
+                                  triples paths
+    config.json                   seed, configuration and components of the run
 """
 from __future__ import annotations
 

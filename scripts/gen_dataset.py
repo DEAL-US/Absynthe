@@ -136,6 +136,7 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
     )
 
     suite = load_dataset_config(path)
+    config_path = Path(path).resolve().as_posix()
     datasets: List[Dict[str, Any]] = []
     for name, request in zip(suite.names, suite.datasets):
         datasets.append({
@@ -145,6 +146,13 @@ def _datasets_from_json(path: str | Path) -> tuple[List[Dict[str, Any]], int | N
             "perturbations": build_perturbations(request.perturbations),
             "output_dir": request.output_dir,
             "max_perturbation_iterations": request.max_perturbation_iterations,
+            "export_triples": request.export_triples,
+            # Recorded in metadata.json so the dataset can be replayed from
+            # its own folder. A per-dataset `seed` (set in the JSON entry or
+            # in `shared`) re-seeds the RNG right before that dataset.
+            "config": request.model_dump(mode="json"),
+            "seed": request.seed,
+            "config_path": config_path,
             "gen_kwargs": {
                 "num_graphs": request.num_graphs,
                 "num_extra_vertices": request.num_extra_vertices,
@@ -175,9 +183,29 @@ def run_pipeline(
         shutil.rmtree(root)
         print(f"Cleared existing {root}/ folder.")
 
-    for entry in datasets:
+    for index, entry in enumerate(datasets):
         name = entry["name"]
         print(f"Generating dataset: {name}")
+
+        # A dataset-level seed makes this dataset reproducible on its own;
+        # otherwise it inherits the suite seed and the RNG state left by the
+        # datasets generated before it.
+        dataset_seed = entry.get("seed")
+        if dataset_seed is not None:
+            set_seed(dataset_seed)
+            seed_scope = "dataset"
+        else:
+            seed_scope = "suite" if seed is not None else None
+
+        provenance: Dict[str, Any] = {
+            "dataset_name": name,
+            "suite_index": index,
+            "suite_size": len(datasets),
+            "suite_seed": seed,
+            "seed_scope": seed_scope,
+        }
+        if entry.get("config_path"):
+            provenance["config_path"] = entry["config_path"]
 
         generator = GraphDatasetGenerator(
             graph_generator=entry["graph_generator"],
@@ -185,6 +213,10 @@ def run_pipeline(
             perturbations=entry["perturbations"],
             output_dir=entry["output_dir"],
             max_perturbation_iterations=entry["max_perturbation_iterations"],
+            export_triples=entry.get("export_triples", True),
+            seed=dataset_seed if dataset_seed is not None else seed,
+            config=entry.get("config"),
+            provenance=provenance,
         )
 
         metadata = generator.generate_dataset(**entry["gen_kwargs"])

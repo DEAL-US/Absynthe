@@ -9,29 +9,21 @@ multigraphs are restored from GraphML before reconstruction). The two PNGs
 are written under ``pictures/reconstruction/``.
 """
 
-import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from graph.dataset_metadata import find_variant, load_dataset_config, load_dataset_metadata  # noqa: E402
 from graph.folder_graph_generator import load_graph_file  # noqa: E402
 from graph.reconstruction import normalize_changes, reconstruct_original  # noqa: E402
 from utils.visualize import visualize_graph  # noqa: E402
 
 
-def load_entry(dataset_dir: Path, graph_id: int) -> dict:
-    with open(dataset_dir / "metadata.json") as f:
-        metadata = json.load(f)
-    for entry in metadata:
-        if entry["graph_id"] == graph_id:
-            return entry
-    raise ValueError(f"graph_id {graph_id} not found in {dataset_dir}/metadata.json")
-
-
 def main(dataset_dir: str = "datasets/house", graph_id: int = 0) -> None:
     ds = Path(dataset_dir)
-    entry = load_entry(ds, graph_id)
+    entry = find_variant(load_dataset_metadata(ds), graph_id)
+    config = load_dataset_config(ds)
 
     # load_graph_file restores directed / multigraph variants (knowledge graphs)
     perturbed = load_graph_file(entry["graph_path"])
@@ -39,6 +31,8 @@ def main(dataset_dir: str = "datasets/house", graph_id: int = 0) -> None:
     reconstructed = reconstruct_original(perturbed, changes)
 
     print(f"Dataset:      {ds}")
+    if config is not None:
+        print(f"Seed:         {config.get('seed')}")
     print(f"Variant id:   {graph_id}  (base_graph_id={entry['base_graph_id']})")
     print(f"Graph kind:   {entry.get('graph_kind', 'plain undirected')}")
     print(f"Perturbed:    {len(perturbed.nodes())} nodes, {len(perturbed.edges())} edges")

@@ -53,9 +53,25 @@ This produces four bundled datasets under `datasets/`:
 - `datasets/star_5/`
 - `datasets/house_cycle5_star5/`
 
-Each dataset contains the perturbed graph variants (organized by perturbation type) along with metadata describing the motifs, labels and the reversible perturbation hints.
+Each dataset contains the perturbed graph variants (organized by perturbation type) along with a `metadata.json` describing the motifs, labels and the reversible perturbation trace of every variant.
 
 Reproducibility is controlled by a single global seed set through `utils.rng.set_seed(...)` (see [utils/rng.py](utils/rng.py)) at the top of [scripts/gen_dataset.py](scripts/gen_dataset.py). Change that value to obtain different random instances.
+
+### Provenance stored with each dataset
+
+Next to `metadata.json`, every dataset gets a `config.json` with the seed, the configuration that produced it and a description of the live components, so a dataset can be audited or regenerated from its own folder given the framework version (see the "Metadata Format" section of [Absynthe_GUIDE.md](Absynthe_GUIDE.md)):
+
+```json
+{
+  "seed": 42,
+  "config": { "...the JSON dataset entry / web request that produced it..." },
+  "components": {"graph_generator": {"class": "RandomMotifComposite", "params": {"…": "…"}}, "labeling_functions": [], "perturbations": []},
+  "generation": {"num_graphs": 300, "graph_kwargs": {"…": "…"}, "max_perturbation_iterations": 15, "export_triples": true, "output_dir": "datasets/house"},
+  "provenance": {"config_path": "…/configs/default.json", "suite_index": 0, "suite_size": 4, "suite_seed": 42, "seed_scope": "suite"}
+}
+```
+
+Seeding has two scopes. The top-level `seed` of a JSON suite is set once, so a dataset that is not the first of its suite also depends on the RNG state left by the datasets before it (`seed_scope: "suite"`). Give a dataset entry (or the `shared` block) its own `seed` to re-seed right before it (`seed_scope: "dataset"`); such a dataset can then be regenerated on its own by replaying the `config` stored in its `config.json`.
 
 ### Reproducible runs via JSON config
 

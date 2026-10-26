@@ -37,6 +37,7 @@ from graph.perturbations import (
 from graph.perturbation_engine import PerturbationPipeline
 from graph.reconstruction import normalize_changes, reconstruct_original
 from graph.dataset_generator import GraphDatasetGenerator
+from graph.dataset_metadata import load_dataset_metadata
 from motifs.utils import assign_labels_to_motif
 
 SAMPLE_TTL = REPO_ROOT / "examples" / "rdf" / "sample.ttl"
@@ -366,8 +367,8 @@ def test_plain_regression():
         gen_dataset.main([cfg_path])
 
         for ds in [d["name"] for d in cfg["datasets"]]:
-            A = json.load(open(os.path.join(baseline, ds, "metadata.json")))
-            B = json.load(open(os.path.join(tmp, ds, "metadata.json")))
+            A = load_dataset_metadata(os.path.join(baseline, ds))
+            B = load_dataset_metadata(os.path.join(tmp, ds))
             assert len(A) == len(B), ds
             for a, b in zip(A, B):
                 assert _norm_entry(a, baseline.replace("\\", "/")) == _norm_entry(b, tmp.replace("\\", "/")), (ds, a["graph_id"])

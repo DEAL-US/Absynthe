@@ -76,6 +76,9 @@ def run_generation(task_id: str, request: DatasetGenerateRequest) -> None:
             output_dir=output_dir,
             max_perturbation_iterations=request.max_perturbation_iterations,
             export_triples=request.export_triples,
+            seed=request.seed,
+            config=request.model_dump(mode="json"),
+            provenance={"source": "web", "task_id": task_id},
         )
         generator.generate_dataset(
             num_graphs=request.num_graphs,

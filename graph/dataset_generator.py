@@ -1,5 +1,4 @@
 import os
-import json
 import warnings
 from typing import List, Tuple, Dict, Any, Optional
 
@@ -8,7 +7,16 @@ import networkx as nx
 from interfaces import GraphGenerator, LabelingFunction, Perturbation, GraphLike
 from interfaces.exceptions import GraphSourceExhausted
 from interfaces.labeling_result import LabelingResult
+from graph.dataset_metadata import (
+    CONFIG_FILENAME,
+    METADATA_FILENAME,
+    build_config,
+    describe_components,
+    save_config,
+    save_metadata,
+)
 from graph.perturbation_engine import PerturbationPipeline
+from utils.rng import get_seed
 from utils.kg_utils import (
     apply_labeling_result,
     graph_kind,
@@ -47,6 +55,11 @@ class GraphDatasetGenerator:
     GraphGenerator: plain undirected graphs and directed multi-relational
     knowledge graphs (see ``utils.kg_utils``) are handled alike. Knowledge
     graphs are additionally exported as triples next to each GraphML file.
+
+    Besides the graphs, every run writes ``metadata.json`` (one entry per
+    variant with its reversible trace) and ``config.json`` (seed, the
+    declarative ``config`` when given, a description of the live components
+    and the generation arguments) — see ``graph.dataset_metadata``.
     """
 
     def __init__(
@@ -57,6 +70,9 @@ class GraphDatasetGenerator:
         output_dir: str = "output",
         max_perturbation_iterations: int = 10,
         export_triples: bool = True,
+        seed: Optional[int] = None,
+        config: Optional[Dict[str, Any]] = None,
+        provenance: Optional[Dict[str, Any]] = None,
     ):
         """
         Args:
@@ -74,6 +90,14 @@ class GraphDatasetGenerator:
             export_triples: When True, graphs flagged as knowledge graphs
                 (``graph.graph["kg"]``) are also written as triples
                 (``.nt`` when node ids are IRIs, ``.tsv`` otherwise).
+            seed: Seed recorded in ``config.json``. Defaults to the seed
+                last passed to ``utils.rng.set_seed`` (``None`` if unseeded).
+                This does not seed the RNG itself.
+            config: Declarative configuration that produced the components
+                (e.g. the JSON dataset entry or the web request), stored
+                verbatim in ``config.json`` so the run can be replayed.
+            provenance: Optional free-form provenance (config file path,
+                position in a suite, ...) stored in ``config.json``.
         """
         self.graph_generator = graph_generator
         self.labeling_functions = labeling_functions or []
@@ -81,6 +105,10 @@ class GraphDatasetGenerator:
         self.output_dir = output_dir
         self.max_perturbation_iterations = max_perturbation_iterations
         self.export_triples = export_triples
+        self.seed = seed
+        self.config = config
+        self.provenance = provenance
+        self.last_config: Optional[Dict[str, Any]] = None
 
         os.makedirs(self.output_dir, exist_ok=True)
         self.originals_dir = os.path.join(self.output_dir, "originals")
@@ -163,7 +191,9 @@ class GraphDatasetGenerator:
                 graph_generator.generate_graph().
 
         Returns:
-            Metadata list with one entry per saved perturbed variant.
+            Metadata list with one entry per saved perturbed variant (the
+            content of ``metadata.json``). The provenance document written
+            to ``config.json`` is available as ``self.last_config``.
         """
         metadata = []
         graph_counter = 0
@@ -251,8 +281,24 @@ class GraphDatasetGenerator:
                 metadata.append(entry)
                 graph_counter += 1
 
-        metadata_path = os.path.join(self.output_dir, "metadata.json")
-        self.save_metadata(metadata, metadata_path)
+        self.save_metadata(metadata, os.path.join(self.output_dir, METADATA_FILENAME))
+
+        self.last_config = build_config(
+            seed=self.seed if self.seed is not None else get_seed(),
+            config=self.config,
+            components=describe_components(
+                self.graph_generator, self.labeling_functions, self.perturbations
+            ),
+            generation={
+                "num_graphs": num_graphs,
+                "graph_kwargs": graph_kwargs,
+                "max_perturbation_iterations": self.max_perturbation_iterations,
+                "export_triples": self.export_triples,
+                "output_dir": self.output_dir,
+            },
+            provenance=self.provenance,
+        )
+        save_config(self.last_config, os.path.join(self.output_dir, CONFIG_FILENAME))
         return metadata
 
     def save_graph(self, graph: GraphLike, path: str) -> Optional[str]:
@@ -276,6 +322,5 @@ class GraphDatasetGenerator:
         return triples_path
 
     def save_metadata(self, metadata, path):
-        """Save metadata to a JSON file."""
-        with open(path, "w") as f:
-            json.dump(metadata, f, indent=4, default=str)
+        """Save the variants list to a JSON file."""
+        save_metadata(metadata, path)

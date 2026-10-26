@@ -165,6 +165,8 @@ graph = gen.generate_graph()
 reset_rng()  # revert to default unseeded randomness
 ```
 
+`get_seed()` returns the seed currently in force (`None` when unseeded). `GraphDatasetGenerator` records it in `config.json` together with the configuration, so a dataset documents how to regenerate itself given the framework version (see §7, "Metadata Format").
+
 ---
 
 ## 4. Labeling
@@ -454,14 +456,37 @@ datasets/my_dataset/
   edge_perturbation/
     graph_1.graphml
     ...
-  metadata.json
+  metadata.json             # one entry per variant (reversible trace)
+  config.json               # seed, configuration and components of the run
 ```
 
 Variant ids are global (`graph_<n>` across all perturbation folders); `metadata.json` maps each variant to its base graph. For knowledge graphs every `.graphml` is accompanied by a triples file (`graph_<n>.tsv`, or `.nt` when node ids are IRIs) unless `export_triples=False`.
 
 ### Metadata Format
 
-Each entry in `metadata.json` describes a perturbed variant:
+`config.json` records the provenance of the run:
+
+```json
+{
+    "seed": 42,
+    "config": {"num_graphs": 100, "motifs": ["…"], "labeling_functions": ["…"], "perturbations": ["…"], "…": "…"},
+    "components": {
+        "graph_generator": {"class": "MotifComposite", "module": "graph.composite_graph_generator", "params": {"motifs": [["cycle", 4], ["house"]]}},
+        "labeling_functions": [{"class": "MotifLabelingFunction", "module": "graph.labeling_functions", "params": {"motif_order": ["cycle_4", "house"]}}],
+        "perturbations": [{"class": "RemoveNodesPerturbation", "module": "graph.perturbations", "params": {"num_nodes": 1, "strategy": "motif", "params": null, "folder_name": "remove_nodes"}, "folder_name": "remove_nodes", "count": 1}]
+    },
+    "generation": {"num_graphs": 100, "graph_kwargs": {"num_extra_vertices": 2, "num_extra_edges": 3, "composition": "sequential"}, "max_perturbation_iterations": 10, "export_triples": true, "output_dir": "datasets/my_dataset"},
+    "provenance": {"config_path": "…", "suite_index": 0, "suite_size": 4, "suite_seed": 42, "seed_scope": "suite"}
+}
+```
+
+- `seed` is the seed passed to `GraphDatasetGenerator(seed=...)`, or else the one last given to `utils.rng.set_seed` (`None` when unseeded). It is recorded, not applied: seed the RNG yourself as in §3.
+- `config` is the declarative configuration handed to `GraphDatasetGenerator(config=...)`; the scripts store the resolved JSON dataset entry and the web backend stores the request. It is `null` for datasets assembled programmatically, in which case `components` is the record to rely on.
+- `components` is always derived from the live objects: class, module and constructor arguments (`rng` excluded). A component may override this by implementing `describe() -> dict`.
+- `generation` keeps the `generate_dataset(...)` call. `provenance` is free-form (`GraphDatasetGenerator(provenance=...)`); the scripts use it to note the config file and the position of the dataset in its suite.
+- `generate_dataset` returns the variants list written to `metadata.json`; the `config.json` document is available as `generator.last_config`. `graph.dataset_metadata` offers `load_dataset_metadata(path)`, `load_dataset_config(path)` (both accept the dataset directory) and `find_variant(variants, graph_id)`.
+
+`metadata.json` is a list with one entry per perturbed variant:
 
 ```json
 {
