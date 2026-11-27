@@ -192,4 +192,4 @@ docker compose up    # → http://localhost:8000
 See [docker-compose.yml](docker-compose.yml) and [Dockerfile](Dockerfile) for the build configuration.
 
 ## License
-This repository is licensed under the GNU General Public License v3.0 (GPL-3.0). See the [GPL-3.0 license](GPL-3.0%20license) file in the project root for the full text.
+This repository is licensed under the MIT License. See the [LICENSE](LICENSE) file in the project root for the full text.
